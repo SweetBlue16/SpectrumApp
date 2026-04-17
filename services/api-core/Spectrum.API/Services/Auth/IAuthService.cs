@@ -41,6 +41,7 @@ namespace Spectrum.API.Services.Auth
             {
                 throw new SpectrumUnauthorizedException("Invalid Google token.");
             }
+
             var user = await CreateOrGetGoogleUserAsync(payload);
             return new AuthResponseDto
             {
@@ -52,7 +53,7 @@ namespace Spectrum.API.Services.Auth
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
         {
-            var user = await _userRepository.GetEmailAsync(loginDto.Email);
+            var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
             {
                 throw new SpectrumUnauthorizedException("Invalid credentials.");
@@ -99,7 +100,7 @@ namespace Spectrum.API.Services.Auth
 
         private async Task<User> CreateOrGetGoogleUserAsync(Payload payload)
         {
-            var user = await _userRepository.GetEmailAsync(payload.Email);
+            var user = await _userRepository.GetUserByEmailAsync(payload.Email);
             if (user == null)
             {
                 user = new User

@@ -5,7 +5,8 @@
         public SpectrumBusinessException(string message) : base(message)
         {
         }
-        public SpectrumBusinessException(string message, Exception innerException) : base(message, innerException)
+        public SpectrumBusinessException(string message, Exception innerException)
+            : base(message, innerException)
         {
         }
     }
