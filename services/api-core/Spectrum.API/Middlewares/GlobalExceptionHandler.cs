@@ -21,7 +21,7 @@ namespace Spectrum.API.Middlewares
                         exception is SpectrumNotFoundException ||
                         exception is SpectrumUnauthorizedException
                         ? exception.Message
-                        : "Se ha producido un error interno en el servidor."
+                        : "An internal server error has occurred."
             };
 
             httpContext.Response.StatusCode = exception switch
@@ -34,11 +34,11 @@ namespace Spectrum.API.Middlewares
 
             if (httpContext.Response.StatusCode == (int)HttpStatusCode.InternalServerError)
             {
-                _logger.LogError(exception, "Error crítico de sistema no controlado.");
+                _logger.LogError(exception, "Unhandled critical system error.");
             }
             else
             {
-                _logger.LogWarning("Violación de regla de negocio: {Message}", exception.Message);
+                _logger.LogWarning("Violation of a business rule: {Message}", exception.Message);
             }
 
             httpContext.Response.ContentType = "application/json";
