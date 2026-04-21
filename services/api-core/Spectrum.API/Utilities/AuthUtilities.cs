@@ -9,8 +9,21 @@ using System.Text;
 
 namespace Spectrum.API.Utilities
 {
+    /// <summary>
+    /// Static utility class that provides helper methods for authentication, 
+    /// input validation, and security token generation.
+    /// </summary>
     public static class AuthUtilities
     {
+        /// <summary>
+        /// Generates a signed JSON Web Token (JWT) for a specific user.
+        /// </summary>
+        /// <param name="user">The user entity containing identity and role data.</param>
+        /// <param name="configuration">Application configuration to retrieve secrets and settings.</param>
+        /// <returns>A string representing the encoded JWT.</returns>
+        /// <remarks>
+        /// The token includes claims for ID, Email, Username, and Role to support RBAC.
+        /// </remarks>
         public static string GenerateJwtToken(User user, IConfiguration configuration)
         {
             var secretKey = configuration["JwtSettings:Secret"];
@@ -36,6 +49,14 @@ namespace Spectrum.API.Utilities
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
+        /// <summary>
+        /// Validates if the registration data conflicts with existing users in the repository.
+        /// </summary>
+        /// <param name="email">The email to verify.</param>
+        /// <param name="username">The username to verify.</param>
+        /// <param name="userRepository">The repository instance for data access.</param>
+        /// <returns>A task representing the asynchronous validation operation.</returns>
+        /// <exception cref="SpectrumBusinessException">Thrown if email or username is already taken.</exception>
         public static async Task ValidateRegisterInput(RegisterDto registerDto, IUserRepository userRepository)
         {
             if (await userRepository.EmailExistsAsync(registerDto.Email))
@@ -49,6 +70,13 @@ namespace Spectrum.API.Utilities
             }
         }
 
+        /// <summary>
+        /// Validates login credentials and checks for account status.
+        /// </summary>
+        /// <param name="user">The user found in the database (may be null).</param>
+        /// <param name="loginDto">The login attempt data containing the plain-text password.</param>
+        /// <exception cref="SpectrumUnauthorizedException">Thrown if credentials match fails.</exception>
+        /// <exception cref="SpectrumBusinessException">Thrown if the account is currently suspended.</exception>
         public static void ValidateLoginInput(User user, LoginDto loginDto)
         {
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
