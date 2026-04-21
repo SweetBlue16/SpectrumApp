@@ -60,6 +60,9 @@ namespace Spectrum.API.Controllers
         /// </summary>
         /// <param name="googleAuthDto">The token received from Google Client SDK.</param>
         /// <returns>A Spectrum API JWT exchanged for the Google identity.</returns>
+        /// <response code="200">Successful authentication with Google.</response>
+        /// <response code="400">If the Google token is invalid or expired.</response>
+        /// <response code="500">If an error occurs while processing the Google authentication.</response>
         [HttpPost("google")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleAuthDto googleAuthDto)
         {
@@ -73,6 +76,11 @@ namespace Spectrum.API.Controllers
         /// <param name="dto">Data transfer object including admin details and the secret master key.</param>
         /// <returns>An <see cref="IActionResult"/> with the admin's JWT.</returns>
         /// <exception cref="SpectrumUnauthorizedException">Thrown when the master key is incorrect.</exception>
+        /// <response code="200">Admin registration successful.</response>
+        /// <response code="400">If the input data fails validation rules.</response>
+        /// <response code="401">If the master key is invalid.</response>
+        /// <response code="409">If the email or username is already registered.</response>
+        /// <response code="500">If an error occurs during admin registration.</response>
         [HttpPost("register-admin")]
         public async Task<IActionResult> RegisterAdmin([FromBody] RegisterAdminDto registerAdminDto)
         {
