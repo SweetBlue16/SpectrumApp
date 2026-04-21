@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Spectrum.API.Dtos.External;
 using Spectrum.API.Services.External;
 
 namespace Spectrum.API.Controllers
@@ -17,14 +18,11 @@ namespace Spectrum.API.Controllers
         }
 
         [HttpGet("search")]
-        public async Task<IActionResult> Search([FromQuery] string query)
+        [Authorize(Roles = "REVIEWER,ADMIN")]
+        public async Task<IActionResult> Search([FromQuery] GameQueyDto queryDto)
         {
-            if (string.IsNullOrWhiteSpace(query))
-            {
-                return Ok(Array.Empty<object>());
-            }
-            var games = await _gameIntegrationService.SearchGamesAsync(query);
-            return Ok(games);
+            var result = await _gameIntegrationService.SearchGamesAsync(queryDto);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

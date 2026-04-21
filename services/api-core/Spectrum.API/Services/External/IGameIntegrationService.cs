@@ -5,7 +5,7 @@ namespace Spectrum.API.Services.External
 {
     public interface IGameIntegrationService
     {
-        Task<IEnumerable<RawgGameDto>> SearchGamesAsync(string query);
+        Task<IEnumerable<RawgGameDto>> SearchGamesAsync(GameQueyDto queryDto);
         Task<RawgGameDto> GetGameDetailsAsync(int externalGameId);
     }
 
@@ -34,7 +34,7 @@ namespace Spectrum.API.Services.External
                 var response = await _httpClient.GetFromJsonAsync<RawgGameDto>(requestUrl);
                 if (response == null)
                 {
-                    throw new SpectrumNotFoundException("External videogame", externalGameId);
+                    throw new SpectrumNotFoundException("resourceNotFound");
                 }
                 return response;
             }
@@ -43,24 +43,37 @@ namespace Spectrum.API.Services.External
                 _logger.LogError(ex, "Failed to get game details for external game ID: {ExternalGameId}", externalGameId);
                 if (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    throw new SpectrumNotFoundException($"External videogame", externalGameId);
+                    throw new SpectrumNotFoundException("resourceNotFound");
                 }
-                throw new SpectrumBusinessException("Could not retrieve game details from external service. Please try again later.");
+                throw new SpectrumBusinessException("externalCatalogUnavailable");
             }
         }
 
-        public async Task<IEnumerable<RawgGameDto>> SearchGamesAsync(string query)
+        public async Task<IEnumerable<RawgGameDto>> SearchGamesAsync(GameQueyDto queryDto)
         {
             try
             {
-                var requestUrl = $"{GamesEndpoint}?key={_rawgApiKey}&search={Uri.EscapeDataString(query)}&page_size={DefaultPageSize}";
-                var response = await _httpClient.GetFromJsonAsync<RawgResponseDto>(requestUrl);
-                return response?.Results ?? [];
+                var queryParams = new Dictionary<string, string>
+                {
+                    ["key"] = _rawgApiKey,
+                    ["search"] = queryDto.Search,
+                    ["platforms"] = queryDto.Platforms,
+                    ["genres"] = queryDto.Genres,
+                    ["ordering"] = queryDto.Ordering,
+                    ["page_size"] = queryDto.PageSize.ToString(),
+                    ["page"] = queryDto.Page.ToString()
+                };
+
+                var queryString = string.Join("&", queryParams
+                    .Where(p => !string.IsNullOrEmpty(p.Value))
+                    .Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
+                var response = await _httpClient.GetFromJsonAsync<RawgResponseDto>($"{GamesEndpoint}?{queryString}");
+                return (IEnumerable<RawgGameDto>)(response ?? new RawgResponseDto { Results = new List<RawgGameDto>() });
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError(ex, "Failed to search games with query: {Query}", query);
-                throw new SpectrumBusinessException("Could not retrieve game data from external service. Please try again later.");
+                _logger.LogError(ex, "Failed to search games with RAWG API");
+                throw new SpectrumBusinessException("externalCatalogUnavailable");
             }
         }
     }
