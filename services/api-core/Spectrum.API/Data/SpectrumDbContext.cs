@@ -12,6 +12,7 @@ namespace Spectrum.API.Data
         public DbSet<User> Users { get; set; }
         public DbSet<Game> Games { get; set; }
         public DbSet<Review> Reviews { get; set; }
+        public DbSet<AdminDetail> AdminDetails { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -19,6 +20,12 @@ namespace Spectrum.API.Data
 
             modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
             modelBuilder.Entity<Review>().HasQueryFilter(r => !r.IsDeleted);
+
+            modelBuilder.Entity<AdminDetail>()
+                .HasOne(ad => ad.User)
+                .WithOne(u => u.AdminDetail)
+                .HasForeignKey<AdminDetail>(ad => ad.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)

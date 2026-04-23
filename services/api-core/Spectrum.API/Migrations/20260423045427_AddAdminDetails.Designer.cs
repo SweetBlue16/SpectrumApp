@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Spectrum.API.Data;
@@ -11,9 +12,11 @@ using Spectrum.API.Data;
 namespace Spectrum.API.Migrations
 {
     [DbContext(typeof(SpectrumDbContext))]
-    partial class SpectrumDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260423045427_AddAdminDetails")]
+    partial class AddAdminDetails
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -58,8 +61,7 @@ namespace Spectrum.API.Migrations
                         .HasColumnName("rfc");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 

@@ -53,6 +53,9 @@ namespace Spectrum.API.Models
         [Column("is_suspended")]
         public bool IsSuspended { get; set; } = false;
 
+        /// <summary>
+        /// Gets or sets a value indicating whether the entity is marked as deleted.
+        /// </summary>
         [Column("is_deleted")]
         public bool IsDeleted { get; set; } = false;
 
@@ -61,6 +64,11 @@ namespace Spectrum.API.Models
         /// </summary>
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
+
+        /// <summary>
+        /// Navigation property for the associated admin details, if the user is an administrator.
+        /// </summary>
+        public virtual AdminDetail? AdminDetail { get; set; }
     }
 
     public static class UserRole

@@ -23,6 +23,7 @@ builder.Services.AddDbContext<SpectrumDbContext>(options =>
 });
 
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAdminDetailRepository, AdminDetailRepository>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 

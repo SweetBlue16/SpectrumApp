@@ -23,6 +23,7 @@ namespace Spectrum.API.Services.Auth
     public class AuthService : IAuthService
     {
         private readonly IUserRepository _userRepository;
+        private readonly IAdminDetailRepository _adminDetailRepository;
         private readonly IConfiguration _configuration;
 
         /// <summary>
@@ -30,11 +31,13 @@ namespace Spectrum.API.Services.Auth
         /// and configuration settings.
         /// </summary>
         /// <param name="userRepository">The user repository used to access and manage user data. Cannot be null.</param>
+        /// <param name="adminDetailRepository">The admin detail repository used to access and manage admin details. Cannot be null.</param>
         /// <param name="configuration">The configuration settings used to retrieve authentication-related options. Cannot be null.</param>
-        public AuthService(IUserRepository userRepository, IConfiguration configuration)
+        public AuthService(IUserRepository userRepository, IAdminDetailRepository adminDetailRepository, IConfiguration configuration)
         {
             _userRepository = userRepository;
             _configuration = configuration;
+            _adminDetailRepository = adminDetailRepository;
         }
 
         /// <summary>
@@ -106,6 +109,7 @@ namespace Spectrum.API.Services.Auth
             }
 
             await AuthUtilities.ValidateRegisterInput(registerAdminDto, _userRepository);
+            // TODO: Validar detalles del administrador
 
             var user = new User
             {
@@ -115,7 +119,20 @@ namespace Spectrum.API.Services.Auth
                 CreatedAt = DateTime.UtcNow,
                 Role = UserRole.Admin
             };
+
+            var adminDetail = new AdminDetail
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                FirstName = registerAdminDto.FirstName,
+                LastName = registerAdminDto.LastName,
+                PhoneNumber = registerAdminDto.PhoneNumber,
+                Address = registerAdminDto.Address,
+                Rfc = registerAdminDto.Rfc
+            };
+
             await _userRepository.AddUserAsync(user);
+            await _adminDetailRepository.AddAdminDetailAsync(adminDetail);
 
             return new AuthResponseDto
             {

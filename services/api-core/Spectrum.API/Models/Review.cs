@@ -23,6 +23,9 @@ namespace Spectrum.API.Models
         [Column("user_id")]
         public Guid UserId { get; set; }
 
+        /// <summary>
+        /// Foreign key identifying the game being reviewed.
+        /// </summary>
         [Required]
         [Column("game_id")]
         public Guid GameId { get; set; }
@@ -42,10 +45,16 @@ namespace Spectrum.API.Models
         [Column("content")]
         public string Content { get; set; } = string.Empty;
 
+        /// <summary>
+        /// URL of an image associated with the review.
+        /// </summary>
         [MaxLength(255)]
         [Column("image_url")]
         public string ImageUrl { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Indicates whether the review has been marked as deleted.
+        /// </summary>
         [Column("is_deleted")]
         public bool IsDeleted { get; set; } = false;
 
@@ -59,9 +68,12 @@ namespace Spectrum.API.Models
         /// Navigation property to the user who wrote the review.
         /// </summary>
         [ForeignKey("UserId")]
-        public User User { get; set; }
+        public virtual User? User { get; set; }
 
+        /// <summary>
+        /// Navigation property to the game being reviewed.
+        /// </summary>
         [ForeignKey("GameId")]
-        public Game Game { get; set; }
+        public virtual Game Game { get; set; } = null!;
     }
 }
