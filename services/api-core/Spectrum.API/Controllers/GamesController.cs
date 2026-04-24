@@ -14,15 +14,15 @@ namespace Spectrum.API.Controllers
     [Authorize]
     public class GamesController : ControllerBase
     {
-        private readonly IGameIntegrationService _gameIntegrationService;
+        private readonly IGameService _gameService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GamesController"/> class.
         /// </summary>
-        /// <param name="gameIntegrationService">Service for external API integration.</param>
-        public GamesController(IGameIntegrationService gameIntegrationService)
+        /// <param name="gameService">Service for external API integration.</param>
+        public GamesController(IGameService gameService)
         {
-            _gameIntegrationService = gameIntegrationService;
+            _gameService = gameService;
         }
 
         /// <summary>
@@ -37,7 +37,7 @@ namespace Spectrum.API.Controllers
         [Authorize(Roles = "REVIEWER,ADMIN")]
         public async Task<IActionResult> Search([FromQuery] GameQueyDto queryDto)
         {
-            var result = await _gameIntegrationService.SearchGamesAsync(queryDto);
+            var result = await _gameService.SearchGamesAsync(queryDto);
             return Ok(result);
         }
 
@@ -51,7 +51,7 @@ namespace Spectrum.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetDetails(int id)
         {
-            var gameDetails = await _gameIntegrationService.GetGameDetailsAsync(id);
+            var gameDetails = await _gameService.GetGameDetailsAsync(id);
             return Ok(gameDetails);
         }
     }

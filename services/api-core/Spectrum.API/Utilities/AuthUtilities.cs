@@ -52,8 +52,7 @@ namespace Spectrum.API.Utilities
         /// <summary>
         /// Validates if the registration data conflicts with existing users in the repository.
         /// </summary>
-        /// <param name="email">The email to verify.</param>
-        /// <param name="username">The username to verify.</param>
+        /// <param name="registerDto">The registration data to validate.</param>
         /// <param name="userRepository">The repository instance for data access.</param>
         /// <returns>A task representing the asynchronous validation operation.</returns>
         /// <exception cref="SpectrumBusinessException">Thrown if email or username is already taken.</exception>

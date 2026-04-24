@@ -3,7 +3,7 @@ using Spectrum.API.Exceptions;
 
 namespace Spectrum.API.Services.External
 {
-    public interface IGameIntegrationService
+    public interface IGameService
     {
         Task<IEnumerable<RawgGameDto>> SearchGamesAsync(GameQueyDto queryDto);
         Task<RawgGameDto> GetGameDetailsAsync(int externalGameId);
@@ -12,7 +12,7 @@ namespace Spectrum.API.Services.External
     /// <summary>
     /// Service implementation for communicating with the RAWG Video Games Database API.
     /// </summary>
-    public class GameIntegrationService : IGameIntegrationService
+    public class GameService : IGameService
     {
         /// <summary>
         /// HTTP client configured with the RAWG base address.
@@ -24,12 +24,12 @@ namespace Spectrum.API.Services.External
         /// </summary>
         private readonly string _rawgApiKey;
 
-        private readonly ILogger<GameIntegrationService> _logger;
+        private readonly ILogger<GameService> _logger;
 
         private const int DefaultPageSize = 20;
         private const string GamesEndpoint = "games";
 
-        public GameIntegrationService(HttpClient httpClient, IConfiguration configuration, ILogger<GameIntegrationService> logger)
+        public GameService(HttpClient httpClient, IConfiguration configuration, ILogger<GameService> logger)
         {
             _httpClient = httpClient;
             _rawgApiKey = configuration["RawgApi:ApiKey"] 
@@ -83,7 +83,7 @@ namespace Spectrum.API.Services.External
                     ["platforms"] = queryDto.Platforms,
                     ["genres"] = queryDto.Genres,
                     ["ordering"] = queryDto.Ordering,
-                    ["page_size"] = queryDto.PageSize.ToString(),
+                    ["page_size"] = queryDto.PageSize.ToString() ?? DefaultPageSize.ToString(),
                     ["page"] = queryDto.Page.ToString()
                 };
 

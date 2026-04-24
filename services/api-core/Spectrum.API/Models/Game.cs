@@ -24,16 +24,28 @@ namespace Spectrum.API.Models
         [Column("title")]
         public string Title { get; set; } = string.Empty;
 
+        /// <summary>
+        /// The name of the developer or studio that created the game.
+        /// </summary>
         [MaxLength(100)]
         [Column("developer")]
         public string Developer { get; set; } = string.Empty;
 
+        /// <summary>
+        /// A brief summary or description of the game's content and features.
+        /// </summary>
         [Column("description")]
         public string Description { get; set; } = string.Empty;
 
+        /// <summary>
+        /// The official release date of the game.
+        /// </summary>
         [Column("release_date")]
         public DateTime? ReleaseDate { get; set; }
 
+        /// <summary>
+        /// URL to the cover image of the game.
+        /// </summary>
         [MaxLength(255)]
         [Column("cover_image_url")]
         public string? CoverImageUrl { get; set; }

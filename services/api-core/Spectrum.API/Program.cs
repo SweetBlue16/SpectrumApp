@@ -44,7 +44,7 @@ builder.Services.AddScoped<IAdminDetailRepository, AdminDetailRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
-builder.Services.AddHttpClient<IGameIntegrationService, GameIntegrationService>(client =>
+builder.Services.AddHttpClient<IGameService, GameService>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["RawgApi:BaseUrl"]);
     client.DefaultRequestHeaders.Add("Accept", "application/json");

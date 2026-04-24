@@ -71,6 +71,9 @@ namespace Spectrum.API.Models
         public virtual AdminDetail? AdminDetail { get; set; }
     }
 
+    /// <summary>
+    /// Defines the possible roles a user can have within the system.
+    /// </summary>
     public static class UserRole
     {
         public const string Admin = "ADMIN";
