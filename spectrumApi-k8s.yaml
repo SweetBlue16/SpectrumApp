@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spectrum-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spectrum-api
+  template:
+    metadata:
+      labels:
+        app: spectrum-api
+    spec:
+      containers:
+        - name: spectrum-api
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spectrum-api-service
+spec:
+  selector:
+    app: spectrum-api 
+  ports:
+    - protocol: TCP
+      port: 80 
+      targetPort: 
+  type: NodePort 
