@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Dtos.External;
 using Spectrum.API.Services.External;
+using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Controllers
 {
@@ -34,7 +35,7 @@ namespace Spectrum.API.Controllers
         /// <response code="401">If the user is not authenticated.</response>
         /// <response code="503">If the external RAWG service is unavailable.</response>
         [HttpGet("search")]
-        [Authorize(Roles = "REVIEWER,ADMIN")]
+        [Authorize(Roles = $"{Constants.Roles.Reviewer},{Constants.Roles.Admin}")]
         public async Task<IActionResult> Search([FromQuery] GameQueyDto queryDto)
         {
             var result = await _gameService.SearchGamesAsync(queryDto);

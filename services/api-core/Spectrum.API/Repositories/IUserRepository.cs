@@ -8,8 +8,8 @@ namespace Spectrum.API.Repositories
     {
         Task<bool> EmailExistsAsync(string email);
         Task<bool> UsernameExistsAsync(string username);
-        Task<User?> GetUserByEmailAsync(string email);
-        Task<User?> GetUserByIdAsync(Guid id);
+        Task<User> GetUserByEmailAsync(string email);
+        Task<User> GetUserByIdAsync(Guid id);
         Task<User> AddUserAsync(User user);
     }
 
@@ -48,14 +48,14 @@ namespace Spectrum.API.Repositories
         /// </summary>
         /// <param name="email">The email to search for.</param>
         /// <returns>The matching user or null.</returns>
-        public async Task<User?> GetUserByEmailAsync(string email)
+        public async Task<User> GetUserByEmailAsync(string email)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email) ?? new User();
         }
 
-        public async Task<User?> GetUserByIdAsync(Guid id)
+        public async Task<User> GetUserByIdAsync(Guid id)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == id) ?? new User();
         }
 
         /// <summary>

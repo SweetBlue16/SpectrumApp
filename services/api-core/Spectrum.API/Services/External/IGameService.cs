@@ -1,5 +1,6 @@
 ﻿using Spectrum.API.Dtos.External;
 using Spectrum.API.Exceptions;
+using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Services.External
 {
@@ -51,7 +52,7 @@ namespace Spectrum.API.Services.External
                 var response = await _httpClient.GetFromJsonAsync<RawgGameDto>(requestUrl);
                 if (response == null)
                 {
-                    throw new SpectrumNotFoundException("resourceNotFound");
+                    throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
                 }
                 return response;
             }
@@ -60,9 +61,9 @@ namespace Spectrum.API.Services.External
                 _logger.LogError(ex, "Failed to get game details for external game ID: {ExternalGameId}", externalGameId);
                 if (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    throw new SpectrumNotFoundException("resourceNotFound");
+                    throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
                 }
-                throw new SpectrumBusinessException("externalCatalogUnavailable");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.ExternalCatalogUnavailable);
             }
         }
 
@@ -97,7 +98,7 @@ namespace Spectrum.API.Services.External
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "Failed to search games with RAWG API");
-                throw new SpectrumBusinessException("externalCatalogUnavailable");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.ExternalCatalogUnavailable);
             }
         }
     }

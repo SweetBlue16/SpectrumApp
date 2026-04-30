@@ -85,7 +85,7 @@ namespace Spectrum.API.Controllers
         public async Task<IActionResult> RegisterAdmin([FromBody] RegisterAdminDto registerAdminDto)
         {
             var response = await _authService.RegisterAdminAsync(registerAdminDto);
-            return Ok(response);
+            return CreatedAtAction(nameof(Login), new { id = response.Token.ToString() }, response);
         }
     }
 }

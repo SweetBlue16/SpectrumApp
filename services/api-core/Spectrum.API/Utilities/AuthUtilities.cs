@@ -78,9 +78,14 @@ namespace Spectrum.API.Utilities
         /// <exception cref="SpectrumBusinessException">Thrown if the account is currently suspended.</exception>
         public static async Task ValidateLoginInput(User user, LoginDto loginDto)
         {
-            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
+            if (user == null || user.IsDeleted)
             {
                 throw new SpectrumUnauthorizedException(Constants.ErrorMessages.UserNotFound);
+            }
+
+            if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidCredentials);
             }
 
             if (user.IsSuspended)
@@ -89,31 +94,36 @@ namespace Spectrum.API.Utilities
             }
         }
 
-        public static async Task ValidateRegisterAdminInput(RegisterAdminDto registerAdminDto, IAdminDetailRepository adminDetailRepository)
+        public static async Task ValidateRegisterAdminInput(RegisterAdminDto registerAdminDto, IAdminDetailRepository adminDetailRepository, string masterKey)
         {
+            if (registerAdminDto.AdminSecretKey != masterKey)
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidAdminKey);
+            }
+
             if (string.IsNullOrWhiteSpace(registerAdminDto.FirstName))
             {
-                throw new SpectrumBusinessException("First name is required.");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
             }
 
             if (string.IsNullOrWhiteSpace(registerAdminDto.LastName))
             {
-                throw new SpectrumBusinessException("Last name is required.");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
             }
 
             if (string.IsNullOrWhiteSpace(registerAdminDto.PhoneNumber))
             {
-                throw new SpectrumBusinessException("Phone number is required.");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
             }
 
             if (string.IsNullOrWhiteSpace(registerAdminDto.Address))
             {
-                throw new SpectrumBusinessException("Address is required.");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
             }
 
             if (string.IsNullOrWhiteSpace(registerAdminDto.Rfc))
             {
-                throw new SpectrumBusinessException("RFC is required.");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
             }
         }
     }

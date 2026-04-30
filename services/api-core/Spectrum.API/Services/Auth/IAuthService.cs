@@ -103,13 +103,8 @@ namespace Spectrum.API.Services.Auth
         public async Task<AuthResponseDto> RegisterAdminAsync(RegisterAdminDto registerAdminDto)
         {
             var masterKey = _configuration["Admin:MasterKey"];
-            if (registerAdminDto.AdminSecretKey != masterKey)
-            {
-                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidAdminKey);
-            }
-
             await AuthUtilities.ValidateRegisterInput(registerAdminDto, _userRepository);
-            await AuthUtilities.ValidateRegisterAdminInput(registerAdminDto, _adminDetailRepository);
+            await AuthUtilities.ValidateRegisterAdminInput(registerAdminDto, _adminDetailRepository, masterKey);
 
             var user = new User
             {
