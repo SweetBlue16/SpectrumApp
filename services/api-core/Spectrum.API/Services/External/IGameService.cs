@@ -4,14 +4,31 @@ using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Services.External
 {
+    /// <summary>
+    /// Defines the contract for interacting with the external video games catalog (e.g., RAWG API).
+    /// </summary>
     public interface IGameService
     {
-        Task<IEnumerable<RawgGameDto>> SearchGamesAsync(GameQueyDto queryDto);
+        /// <summary>
+        /// Searches for video games based on specified filters, keywords, and pagination parameters.
+        /// </summary>
+        /// <param name="queryDto">The data transfer object containing search, filter, and pagination criteria.</param>
+        /// <returns>A collection of <see cref="RawgGameDto"/> matching the search criteria. Returns an empty collection if no results are found.</returns>
+        /// <exception cref="SpectrumBusinessException">Thrown if the external catalog service is unavailable or unreachable.</exception>
+        Task<IEnumerable<RawgGameDto>> SearchGamesAsync(GameQueryDto queryDto);
+
+        /// <summary>
+        /// Retrieves extensive and detailed information for a specific video game using its external identifier.
+        /// </summary>
+        /// <param name="externalGameId">The unique numeric identifier assigned by the external RAWG provider.</param>
+        /// <returns>A <see cref="RawgGameDto"/> containing the detailed information of the requested game.</returns>
+        /// <exception cref="SpectrumNotFoundException">Thrown if the requested game does not exist in the external catalog.</exception>
+        /// <exception cref="SpectrumBusinessException">Thrown if the external catalog service is unavailable.</exception>
         Task<RawgGameDto> GetGameDetailsAsync(int externalGameId);
     }
 
     /// <summary>
-    /// Service implementation for communicating with the RAWG Video Games Database API.
+    /// Service implementation for communicating with the external RAWG Video Games Database API.
     /// </summary>
     public class GameService : IGameService
     {
@@ -30,6 +47,13 @@ namespace Spectrum.API.Services.External
         private const int DefaultPageSize = 20;
         private const string GamesEndpoint = "games";
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GameService"/> class.
+        /// </summary>
+        /// <param name="httpClient">The HTTP client configured with the RAWG base address.</param>
+        /// <param name="configuration">The application configuration to securely retrieve the API key.</param>
+        /// <param name="logger">The logger instance for tracking external API requests and errors.</param>
+        /// <exception cref="ArgumentNullException">Thrown if the RAWG API key is not configured in the application settings.</exception>
         public GameService(HttpClient httpClient, IConfiguration configuration, ILogger<GameService> logger)
         {
             _httpClient = httpClient;
@@ -38,12 +62,7 @@ namespace Spectrum.API.Services.External
             _logger = logger;
         }
 
-        /// <summary>
-        /// Retrieves extensive details for a specific game using its external ID.
-        /// </summary>
-        /// <param name="externalGameId">The ID assigned by the RAWG provider.</param>
-        /// <returns>Detailed information about the requested game.</returns>
-        /// <exception cref="SpectrumNotFoundException">Thrown if the game does not exist in the external catalog.</exception>
+        /// <inheritdoc />
         public async Task<RawgGameDto> GetGameDetailsAsync(int externalGameId)
         {
             try
@@ -67,13 +86,8 @@ namespace Spectrum.API.Services.External
             }
         }
 
-        /// <summary>
-        /// Searches for video games based on specified filters and keywords.
-        /// </summary>
-        /// <param name="queryDto">Parameters for searching, filtering, and pagination.</param>
-        /// <returns>A collection of games matching the criteria. Follows the Empty Object Pattern.</returns>
-        /// <exception cref="SpectrumBusinessException">Thrown if the external service is unreachable (503).</exception>
-        public async Task<IEnumerable<RawgGameDto>> SearchGamesAsync(GameQueyDto queryDto)
+        /// <inheritdoc />
+        public async Task<IEnumerable<RawgGameDto>> SearchGamesAsync(GameQueryDto queryDto)
         {
             try
             {

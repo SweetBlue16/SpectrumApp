@@ -8,17 +8,49 @@ using static Google.Apis.Auth.GoogleJsonWebSignature;
 
 namespace Spectrum.API.Services.Auth
 {
+    /// <summary>
+    /// Defines the contracts for identity management, authentication, and user registration in Spectrum.
+    /// </summary>
     public interface IAuthService
     {
+        /// <summary>
+        /// Registers a new standard user account (Reviewer) using the provided registration details.
+        /// </summary>
+        /// <param name="registerDto">The registration information for the new user, including username, email, and password. Cannot be null.</param>
+        /// <returns>An <see cref="AuthResponseDto"/> containing the authentication token and account details for the newly registered user.</returns>
+        /// <exception cref="SpectrumBusinessException">Thrown when the email or username is already registered.</exception>
         Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto);
+
+        /// <summary>
+        /// Registers a new administrator account using the provided registration details and a master key.
+        /// </summary>
+        /// <param name="registerAdminDto">The registration information for the new administrator, including personal details and the required admin secret key. Cannot be null.</param>
+        /// <returns>An <see cref="AuthResponseDto"/> containing the authentication token and account details for the newly registered administrator.</returns>
+        /// <exception cref="SpectrumUnauthorizedException">Thrown if the provided admin secret key is invalid.</exception>
+        /// <exception cref="SpectrumBusinessException">Thrown if any required personal detail is missing or if email/username is already taken.</exception>
         Task<AuthResponseDto> RegisterAdminAsync(RegisterAdminDto registerAdminDto);
+
+        /// <summary>
+        /// Authenticates a user with the provided local login credentials and generates a JWT token upon successful authentication.
+        /// </summary>
+        /// <param name="loginDto">An object containing the user's login credentials, including email and password. Cannot be null.</param>
+        /// <returns>An <see cref="AuthResponseDto"/> containing the generated JWT token and user information if authentication is successful.</returns>
+        /// <exception cref="SpectrumUnauthorizedException">Thrown if the credentials are invalid, the user does not exist, or the account is suspended.</exception>
         Task<AuthResponseDto> LoginAsync(LoginDto loginDto);
+
+        /// <summary>
+        /// Handles the Google Single Sign-On (SSO) process by validating the provided Google OAuth token,
+        /// creating or retrieving the corresponding user, and generating a local JWT for authentication.
+        /// </summary>
+        /// <param name="googleAuthDto">The Google authentication data transfer object containing the OAuth credential token.</param>
+        /// <returns>An <see cref="AuthResponseDto"/> containing the local JWT, username, and email of the authenticated user.</returns>
+        /// <exception cref="SpectrumUnauthorizedException">Thrown if the Google token is invalid or if the associated local account is suspended.</exception>
         Task<AuthResponseDto> GoogleLoginAsync(GoogleAuthDto googleAuthDto);
     }
 
     /// <summary>
     /// Service responsible for handling authentication-related operations, 
-    /// including user registration, login, and Google OAuth integration.
+    /// including user registration, local login, and Google OAuth integration.
     /// </summary>
     public class AuthService : IAuthService
     {
@@ -27,7 +59,7 @@ namespace Spectrum.API.Services.Auth
         private readonly IConfiguration _configuration;
 
         /// <summary>
-        /// Initializes a new instance of the AuthService class with the specified user repository 
+        /// Initializes a new instance of the <see cref="AuthService"/> class with the specified repositories 
         /// and configuration settings.
         /// </summary>
         /// <param name="userRepository">The user repository used to access and manage user data. Cannot be null.</param>
@@ -40,12 +72,7 @@ namespace Spectrum.API.Services.Auth
             _adminDetailRepository = adminDetailRepository;
         }
 
-        /// <summary>
-        /// Handles the Google login process by validating the provided Google OAuth token,
-        /// creating or retrieving the corresponding user, and generating a JWT for authentication.
-        /// </summary>
-        /// <param name="googleAuthDto">The Google authentication data transfer object containing the OAuth token.</param>
-        /// <returns>An AuthResponseDto containing the JWT, username, and email of the authenticated user.</returns>
+        /// <inheritdoc />
         public async Task<AuthResponseDto> GoogleLoginAsync(GoogleAuthDto googleAuthDto)
         {
             Payload payload;
@@ -71,14 +98,7 @@ namespace Spectrum.API.Services.Auth
             };
         }
 
-        /// <summary>
-        /// Authenticates a user with the provided login credentials and generates a JWT token upon successful
-        /// authentication.
-        /// </summary>
-        /// <remarks>Throws an exception if the login credentials are invalid or the user does not
-        /// exist.</remarks>
-        /// <param name="loginDto">An object containing the user's login credentials, including email and password. Cannot be null.</param>
-        /// <returns>An AuthResponseDto containing the generated JWT token and user information if authentication is successful.</returns>
+        /// <inheritdoc />
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
         {
             var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
@@ -92,14 +112,7 @@ namespace Spectrum.API.Services.Auth
             };
         }
 
-        /// <summary>
-        /// Registers a new administrator account using the provided registration details.
-        /// </summary>
-        /// <param name="registerAdminDto">The registration information for the new administrator, including username, email, password, and the
-        /// required admin secret key. Cannot be null.</param>
-        /// <returns>An AuthResponseDto containing the authentication token and account details for the newly registered
-        /// administrator.</returns>
-        /// <exception cref="SpectrumUnauthorizedException">Thrown if the provided admin secret key is invalid.</exception>
+        /// <inheritdoc />
         public async Task<AuthResponseDto> RegisterAdminAsync(RegisterAdminDto registerAdminDto)
         {
             var masterKey = _configuration["Admin:MasterKey"];
@@ -137,11 +150,7 @@ namespace Spectrum.API.Services.Auth
             };
         }
 
-        /// <summary>
-        /// Registers a new user account using the provided registration details.
-        /// </summary>
-        /// <param name="registerDto">The registration information for the new user, including username, email, and password. Cannot be null.</param>
-        /// <returns>An AuthResponseDto containing the authentication token and account details for the newly registered user.</returns>
+        /// <inheritdoc />
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
         {
             await AuthUtilities.ValidateRegisterInput(registerDto, _userRepository);
@@ -170,8 +179,7 @@ namespace Spectrum.API.Services.Auth
         /// retrieves the existing user associated with the provided email address.
         /// </summary>
         /// <param name="payload">The Google authentication payload containing user information such as email and name. Cannot be null.</param>
-        /// <returns>A user entity corresponding to the provided Google account. If the user does not exist, a new user is
-        /// created and returned.</returns>
+        /// <returns>A user entity corresponding to the provided Google account. If the user does not exist, a new user is created and returned.</returns>
         /// <exception cref="SpectrumUnauthorizedException">Thrown if the existing user account associated with the provided email is suspended.</exception>
         private async Task<User> CreateOrGetGoogleUserAsync(Payload payload)
         {

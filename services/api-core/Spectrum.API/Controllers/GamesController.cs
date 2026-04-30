@@ -36,7 +36,7 @@ namespace Spectrum.API.Controllers
         /// <response code="503">If the external RAWG service is unavailable.</response>
         [HttpGet("search")]
         [Authorize(Roles = $"{Constants.Roles.Reviewer},{Constants.Roles.Admin}")]
-        public async Task<IActionResult> Search([FromQuery] GameQueyDto queryDto)
+        public async Task<IActionResult> Search([FromQuery] GameQueryDto queryDto)
         {
             var result = await _gameService.SearchGamesAsync(queryDto);
             return Ok(result);

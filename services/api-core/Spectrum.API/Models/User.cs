@@ -5,20 +5,24 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Spectrum.API.Models
 {
     /// <summary>
-    /// Represents a system user, either a Reviewer or an Administrator.
+    /// Represents the core identity entity within the relational database. 
+    /// This model handles authentication state, authorization roles, and acts as the 
+    /// primary principal for cross-service data correlation (e.g., matching a userId in MongoDB).
     /// </summary>
     [Table("users")]
     public class User
     {
         /// <summary>
-        /// Unique identifier for the user.
+        /// The primary key generated as a universally unique identifier (UUID/GUID). 
+        /// Used strictly for internal referential integrity and distributed system tracking.
         /// </summary>
         [Key]
         [Column("id")]
         public Guid Id { get; set; }
 
         /// <summary>
-        /// Public display name and unique identifier for mentions.
+        /// The unique public-facing moniker for the user. Restricted to 50 characters 
+        /// to optimize database index sizes and UI rendering constraints.
         /// </summary>
         [Required]
         [MaxLength(50)]
@@ -26,7 +30,8 @@ namespace Spectrum.API.Models
         public string Username { get; set; } = string.Empty;
 
         /// <summary>
-        /// Primary email address used for communication and login.
+        /// The unique email address serving as the primary credential for local authentication 
+        /// and system notifications. Maps to identity provider claims (e.g., Google SSO).
         /// </summary>
         [Required]
         [MaxLength(100)]
@@ -34,14 +39,16 @@ namespace Spectrum.API.Models
         public string Email { get; set; } = string.Empty;
 
         /// <summary>
-        /// Secure BCrypt-hashed password string.
+        /// The cryptographically secure hash of the user's password, generated using the BCrypt algorithm. 
+        /// Never used to store plain-text or easily reversible credentials.
         /// </summary>
         [Required]
         [Column("password_hash")]
         public string PasswordHash { get; set; } = string.Empty;
 
         /// <summary>
-        /// The security role assigned to the user (e.g., Admin, Reviewer).
+        /// Determines the authorization level and access boundaries for the user within the system. 
+        /// Must strictly correspond to one of the predefined <see cref="Constants.Roles"/>.
         /// </summary>
         [Required]
         [MaxLength(20)]
@@ -49,25 +56,31 @@ namespace Spectrum.API.Models
         public string Role { get; set; } = Constants.Roles.Reviewer;
 
         /// <summary>
-        /// Flag indicating if the user is currently banned from performing actions.
+        /// An administrative flag indicating whether the user's privileges have been temporarily revoked. 
+        /// When true, the API gateway or auth service should actively reject login attempts and state-mutating requests.
         /// </summary>
         [Column("is_suspended")]
         public bool IsSuspended { get; set; } = false;
 
         /// <summary>
-        /// Gets or sets a value indicating whether the entity is marked as deleted.
+        /// Implements the "soft-delete" pattern. When true, the user is logically removed from active 
+        /// application queries to preserve historical referential integrity (e.g., past reviews/votes) 
+        /// without physically dropping the record.
         /// </summary>
         [Column("is_deleted")]
         public bool IsDeleted { get; set; } = false;
 
         /// <summary>
-        /// Timestamp of the account creation in UTC.
+        /// The exact UTC timestamp capturing when the user's identity was first provisioned in the database. 
+        /// Used for auditing and account age verification.
         /// </summary>
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
 
         /// <summary>
-        /// Navigation property for the associated admin details, if the user is an administrator.
+        /// Entity Framework navigation property establishing a one-to-one (or zero-to-one) relationship 
+        /// with <see cref="Models.AdminDetail"/>. This is lazily loaded and only populated if the user 
+        /// holds an administrative role and has completed their onboarding profile.
         /// </summary>
         public virtual AdminDetail? AdminDetail { get; set; }
     }

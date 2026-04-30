@@ -94,6 +94,17 @@ namespace Spectrum.API.Utilities
             }
         }
 
+        /// <summary>
+        /// Validates the input data for registering a new administrator account, 
+        /// checking the provided secret key against the system's master key and 
+        /// ensuring all required personal details are present.
+        /// </summary>
+        /// <param name="registerAdminDto">The data transfer object containing the administrator's registration details.</param>
+        /// <param name="adminDetailRepository">The repository instance for administrator details data access.</param>
+        /// <param name="masterKey">The system's master secret key required to authorize the creation of an administrator account.</param>
+        /// <returns>A task representing the asynchronous validation operation.</returns>
+        /// <exception cref="SpectrumUnauthorizedException">Thrown if the provided admin secret key does not match the system's master key.</exception>
+        /// <exception cref="SpectrumBusinessException">Thrown if any required personal detail (first name, last name, phone number, address, RFC) is missing or whitespace.</exception>
         public static async Task ValidateRegisterAdminInput(RegisterAdminDto registerAdminDto, IAdminDetailRepository adminDetailRepository, string masterKey)
         {
             if (registerAdminDto.AdminSecretKey != masterKey)

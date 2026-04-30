@@ -1,14 +1,41 @@
 ﻿namespace Spectrum.API.Utilities
 {
+    /// <summary>
+    /// A centralized repository for application-wide static constants.
+    /// This class helps eliminate "magic strings" and ensures consistency
+    /// across authentication, authorization, and error handling mechanisms.
+    /// </summary>
     public static class Constants
     {
+        /// <summary>
+        /// Defines the standard role identifiers used for Role-Based Access Control (RBAC)
+        /// throughout the Spectrum ecosystem.
+        /// </summary>
         public static class Roles
         {
+            /// <summary>
+            /// Identifier for users with full administrative privileges, capable of 
+            /// managing events, moderating content, and overseeing the platform.
+            /// </summary>
             public const string Admin = "ADMIN";
+
+            /// <summary>
+            /// Identifier for standard users who can actively participate by 
+            /// publishing reviews, casting votes, and claiming drop keys.
+            /// </summary>
             public const string Reviewer = "REVIEWER";
+
+            /// <summary>
+            /// Identifier for users with read-only access. They can browse content 
+            /// but cannot create reviews, vote, or claim keys.
+            /// </summary>
             public const string Reader = "READER";
         }
 
+        /// <summary>
+        /// A collection of standardized error codes used across the API to provide 
+        /// consistent and localized responses to the client application.
+        /// </summary>
         public static class ErrorMessages
         {
             public const string InvalidToken = "invalidToken";

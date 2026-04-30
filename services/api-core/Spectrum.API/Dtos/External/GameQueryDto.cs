@@ -2,7 +2,7 @@
 
 namespace Spectrum.API.Dtos.External
 {
-    public class GameQueyDto
+    public class GameQueryDto
     {
         [MaxLength(100)]
         public string? Search { get; set; }
