@@ -38,7 +38,7 @@ namespace Spectrum.API.Controllers
         public async Task<IActionResult> Register([FromBody] RegisterDto registerDto)
         {
             var response = await _authService.RegisterAsync(registerDto);
-            return Ok(response);
+            return CreatedAtAction(nameof(Login), new { id = response.Token.ToString() }, response);
         }
 
         /// <summary>

@@ -8,8 +8,9 @@ namespace Spectrum.API.Repositories
     {
         Task<bool> EmailExistsAsync(string email);
         Task<bool> UsernameExistsAsync(string username);
-        Task<User> GetUserByEmailAsync(string email);
-        Task AddUserAsync(User user);
+        Task<User?> GetUserByEmailAsync(string email);
+        Task<User?> GetUserByIdAsync(Guid id);
+        Task<User> AddUserAsync(User user);
     }
 
     public class UserRepository : IUserRepository
@@ -25,10 +26,11 @@ namespace Spectrum.API.Repositories
         /// Persists a new user record to the database.
         /// </summary>
         /// <param name="user">The user entity to save.</param>
-        public async Task AddUserAsync(User user)
+        public async Task<User> AddUserAsync(User user)
         {
-            _context.Users.Add(user);
+            await _context.Users.AddAsync(user);
             await _context.SaveChangesAsync();
+            return user;
         }
 
         /// <summary>
@@ -46,9 +48,14 @@ namespace Spectrum.API.Repositories
         /// </summary>
         /// <param name="email">The email to search for.</param>
         /// <returns>The matching user or null.</returns>
-        public async Task<User> GetUserByEmailAsync(string email)
+        public async Task<User?> GetUserByEmailAsync(string email)
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
+
+        public async Task<User?> GetUserByIdAsync(Guid id)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
         }
 
         /// <summary>

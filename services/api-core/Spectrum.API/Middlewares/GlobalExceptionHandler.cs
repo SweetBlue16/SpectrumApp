@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Exceptions;
-using System.Net;
 
 namespace Spectrum.API.Middlewares
 {
@@ -30,37 +30,52 @@ namespace Spectrum.API.Middlewares
         /// <returns>True if the exception was handled, false otherwise.</returns>
         public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
-            var response = new
+            _logger.LogError(exception, "An exception occurred: {Message}", exception.Message);
+
+            var problemDetails = new ProblemDetails
             {
-                Error = exception is SpectrumBusinessException ||
-                        exception is SpectrumNotFoundException ||
-                        exception is SpectrumUnauthorizedException ||
-                        exception is SpectrumServiceUnavailableException
-                        ? exception.Message
-                        : "An internal server error has occurred."
+                Instance = httpContext.Request.Path
             };
 
-            httpContext.Response.StatusCode = exception switch
+            switch (exception)
             {
-                SpectrumBusinessException => (int)HttpStatusCode.BadRequest,
-                SpectrumUnauthorizedException => (int)HttpStatusCode.Unauthorized,
-                SpectrumNotFoundException => (int)HttpStatusCode.NotFound,
-                SpectrumServiceUnavailableException => (int)HttpStatusCode.ServiceUnavailable,
-                _ => (int)HttpStatusCode.InternalServerError
-            };
+                case SpectrumUnauthorizedException ex:
+                    httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    problemDetails.Title = "Unauthorized";
+                    problemDetails.Status = StatusCodes.Status401Unauthorized;
+                    problemDetails.Detail = ex.Message;
+                    break;
 
-            if (httpContext.Response.StatusCode == (int)HttpStatusCode.InternalServerError)
-            {
-                _logger.LogError(exception, "Unhandled critical system error.");
+                case SpectrumNotFoundException ex:
+                    httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+                    problemDetails.Title = "Resource not found";
+                    problemDetails.Status = StatusCodes.Status404NotFound;
+                    problemDetails.Detail = ex.Message;
+                    break;
+
+                case SpectrumBusinessException ex:
+                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    problemDetails.Title = "Business validation error";
+                    problemDetails.Status = StatusCodes.Status400BadRequest;
+                    problemDetails.Detail = ex.Message;
+                    break;
+
+                case SpectrumServiceUnavailableException ex:
+                    httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                    problemDetails.Title = "Service unavailable";
+                    problemDetails.Status = StatusCodes.Status503ServiceUnavailable;
+                    problemDetails.Detail = ex.Message;
+                    break;
+
+                default: 
+                    httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                    problemDetails.Title = "Internal server error";
+                    problemDetails.Status = StatusCodes.Status500InternalServerError;
+                    problemDetails.Detail = "An unexpected error occurred while processing the request.";
+                    break;
             }
-            else
-            {
-                _logger.LogWarning("Violation of a business rule: {Message}", exception.Message);
-            }
 
-            httpContext.Response.ContentType = "application/json";
-            await httpContext.Response.WriteAsJsonAsync(response, cancellationToken);
-
+            await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
             return true;
         }
     }

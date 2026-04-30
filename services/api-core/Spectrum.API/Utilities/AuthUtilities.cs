@@ -60,12 +60,12 @@ namespace Spectrum.API.Utilities
         {
             if (await userRepository.EmailExistsAsync(registerDto.Email))
             {
-                throw new SpectrumBusinessException("emailAlreadyRegistered");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.EmailAlreadyRegistered);
             }
 
             if (await userRepository.UsernameExistsAsync(registerDto.Username))
             {
-                throw new SpectrumBusinessException("usernameAlreadyTaken");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.UsernameAlreadyTaken);
             }
         }
 
@@ -76,16 +76,44 @@ namespace Spectrum.API.Utilities
         /// <param name="loginDto">The login attempt data containing the plain-text password.</param>
         /// <exception cref="SpectrumUnauthorizedException">Thrown if credentials match fails.</exception>
         /// <exception cref="SpectrumBusinessException">Thrown if the account is currently suspended.</exception>
-        public static void ValidateLoginInput(User user, LoginDto loginDto)
+        public static async Task ValidateLoginInput(User user, LoginDto loginDto)
         {
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
             {
-                throw new SpectrumUnauthorizedException("invalidCredentials");
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.UserNotFound);
             }
 
             if (user.IsSuspended)
             {
-                throw new SpectrumUnauthorizedException("accountSuspended");
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.AccountSuspended);
+            }
+        }
+
+        public static async Task ValidateRegisterAdminInput(RegisterAdminDto registerAdminDto, IAdminDetailRepository adminDetailRepository)
+        {
+            if (string.IsNullOrWhiteSpace(registerAdminDto.FirstName))
+            {
+                throw new SpectrumBusinessException("First name is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.LastName))
+            {
+                throw new SpectrumBusinessException("Last name is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.PhoneNumber))
+            {
+                throw new SpectrumBusinessException("Phone number is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.Address))
+            {
+                throw new SpectrumBusinessException("Address is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.Rfc))
+            {
+                throw new SpectrumBusinessException("RFC is required.");
             }
         }
     }

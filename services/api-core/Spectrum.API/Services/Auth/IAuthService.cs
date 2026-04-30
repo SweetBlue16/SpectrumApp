@@ -59,7 +59,7 @@ namespace Spectrum.API.Services.Auth
             }
             catch (InvalidJwtException)
             {
-                throw new SpectrumUnauthorizedException("unauthorized");
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.Unauthorized);
             }
 
             var user = await CreateOrGetGoogleUserAsync(payload);
@@ -82,7 +82,7 @@ namespace Spectrum.API.Services.Auth
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
         {
             var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
-            AuthUtilities.ValidateLoginInput(user, loginDto);
+            await AuthUtilities.ValidateLoginInput(user, loginDto);
 
             return new AuthResponseDto
             {
@@ -105,11 +105,11 @@ namespace Spectrum.API.Services.Auth
             var masterKey = _configuration["Admin:MasterKey"];
             if (registerAdminDto.AdminSecretKey != masterKey)
             {
-                throw new SpectrumUnauthorizedException("invalidAdminKey");
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidAdminKey);
             }
 
             await AuthUtilities.ValidateRegisterInput(registerAdminDto, _userRepository);
-            // TODO: Validar detalles del administrador
+            await AuthUtilities.ValidateRegisterAdminInput(registerAdminDto, _adminDetailRepository);
 
             var user = new User
             {
@@ -117,7 +117,7 @@ namespace Spectrum.API.Services.Auth
                 Email = registerAdminDto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerAdminDto.Password),
                 CreatedAt = DateTime.UtcNow,
-                Role = UserRole.Admin
+                Role = Constants.Roles.Admin
             };
 
             var adminDetail = new AdminDetail
@@ -156,7 +156,7 @@ namespace Spectrum.API.Services.Auth
                 Email = registerDto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password),
                 CreatedAt = DateTime.UtcNow,
-                Role = UserRole.Reviewer,
+                Role = Constants.Roles.Reviewer,
                 IsSuspended = false,
                 IsDeleted = false
             };
@@ -194,12 +194,9 @@ namespace Spectrum.API.Services.Auth
                 };
                 await _userRepository.AddUserAsync(user);
             }
-            else
+            else if (user.IsSuspended)
             {
-                if (user.IsSuspended)
-                {
-                    throw new SpectrumUnauthorizedException("accountSuspended");
-                }
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.AccountSuspended);
             }
             return user;
         }

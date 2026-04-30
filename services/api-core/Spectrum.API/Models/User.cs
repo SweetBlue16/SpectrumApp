@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Spectrum.API.Utilities;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Spectrum.API.Models
@@ -45,7 +46,7 @@ namespace Spectrum.API.Models
         [Required]
         [MaxLength(20)]
         [Column("role")]
-        public string Role { get; set; } = UserRole.Reviewer;
+        public string Role { get; set; } = Constants.Roles.Reviewer;
 
         /// <summary>
         /// Flag indicating if the user is currently banned from performing actions.
@@ -69,14 +70,5 @@ namespace Spectrum.API.Models
         /// Navigation property for the associated admin details, if the user is an administrator.
         /// </summary>
         public virtual AdminDetail? AdminDetail { get; set; }
-    }
-
-    /// <summary>
-    /// Defines the possible roles a user can have within the system.
-    /// </summary>
-    public static class UserRole
-    {
-        public const string Admin = "ADMIN";
-        public const string Reviewer = "REVIEWER";
     }
 }
