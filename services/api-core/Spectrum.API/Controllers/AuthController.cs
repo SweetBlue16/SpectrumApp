@@ -5,50 +5,52 @@ using Spectrum.API.Services.Auth;
 namespace Spectrum.API.Controllers
 {
     /// <summary>
-    /// Controller responsible for handling user authentication, registration,
-    /// and administrative account creation.
+    /// Serves as the primary entry point for identity management, authentication, and token issuance.
+    /// All endpoints in this controller delegate business logic to the Auth Service and rely on the 
+    /// GlobalExceptionHandler to map domain exceptions to RFC 7807 Problem Details.
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
     public class AuthController : ControllerBase
     {
-        /// <summary>
-        /// Service handling the business logic for authentication.
-        /// </summary>
         private readonly IAuthService _authService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AuthController"/> class.
         /// </summary>
-        /// <param name="authService">The authentication service implementation.</param>
+        /// <param name="authService">The authentication service handling the core identity business logic.</param>
         public AuthController(IAuthService authService)
         {
             _authService = authService;
         }
 
         /// <summary>
-        /// Registers a new standard user (Reviewer) in the system.
+        /// Provisions a new standard user account (Reviewer) in the local database.
         /// </summary>
-        /// <param name="registerDto">Data transfer object containing registration details.</param>
-        /// <returns>An <see cref="IActionResult"/> containing the authentication response with a JWT.</returns>
-        /// <response code="200">Returns the user info and access token.</response>
-        /// <response code="400">If the input data fails validation rules.</response>
-        /// <response code="409">If the email or username is already registered.</response>
+        /// <param name="registerDto">The data transfer object containing the desired username, email, and password.</param>
+        /// <returns>The newly created user's identity details and an active JSON Web Token.</returns>
+        /// <response code="201">Successfully created the user and issued a token.</response>
+        /// <response code="400">The payload failed validation or the email/username is already in use.</response>
         [HttpPost("register")]
+        [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Register([FromBody] RegisterDto registerDto)
         {
             var response = await _authService.RegisterAsync(registerDto);
-            return CreatedAtAction(nameof(Login), new { id = response.Token.ToString() }, response);
+            return CreatedAtAction(nameof(Login), new { id = response.Token }, response);
         }
 
         /// <summary>
-        /// Authenticates an existing user and provides an access token.
+        /// Authenticates local user credentials and issues a stateless JSON Web Token (JWT) for subsequent authorized requests.
         /// </summary>
-        /// <param name="loginDto">Data transfer object containing login credentials.</param>
-        /// <returns>An <see cref="IActionResult"/> containing the JWT for authorized requests.</returns>
-        /// <response code="200">Successful authentication.</response>
-        /// <response code="401">If credentials are invalid or the account is suspended.</response>
+        /// <param name="loginDto">The data transfer object containing the user's email and plain-text password.</param>
+        /// <returns>The user's identity details and an active JSON Web Token.</returns>
+        /// <response code="200">Successfully authenticated and issued a token.</response>
+        /// <response code="401">Authentication failed due to invalid credentials, non-existent user, or suspended account.</response>
         [HttpPost("login")]
+        [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
             var response = await _authService.LoginAsync(loginDto);
@@ -56,14 +58,16 @@ namespace Spectrum.API.Controllers
         }
 
         /// <summary>
-        /// Authenticates a user using a Google-provided identity token.
+        /// Performs an OAuth2 token exchange, validating a Google-issued identity token and provisioning 
+        /// a local Spectrum session for the user.
         /// </summary>
-        /// <param name="googleAuthDto">The token received from Google Client SDK.</param>
-        /// <returns>A Spectrum API JWT exchanged for the Google identity.</returns>
-        /// <response code="200">Successful authentication with Google.</response>
-        /// <response code="400">If the Google token is invalid or expired.</response>
-        /// <response code="500">If an error occurs while processing the Google authentication.</response>
+        /// <param name="googleAuthDto">The object containing the JWT credential issued by the Google Client SDK.</param>
+        /// <returns>A local Spectrum API JWT exchanged for the verified Google identity.</returns>
+        /// <response code="200">Successfully authenticated with Google and issued a local token.</response>
+        /// <response code="401">The Google token is invalid, expired, or the associated local account is suspended.</response>
         [HttpPost("google")]
+        [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleAuthDto googleAuthDto)
         {
             var response = await _authService.GoogleLoginAsync(googleAuthDto);
@@ -71,17 +75,18 @@ namespace Spectrum.API.Controllers
         }
 
         /// <summary>
-        /// Registers a new administrative user using a secure system master key.
+        /// Provisions a high-privileged administrative account. This endpoint is protected by a 
+        /// system-level master key to prevent unauthorized privilege escalation.
         /// </summary>
-        /// <param name="dto">Data transfer object including admin details and the secret master key.</param>
-        /// <returns>An <see cref="IActionResult"/> with the admin's JWT.</returns>
-        /// <exception cref="SpectrumUnauthorizedException">Thrown when the master key is incorrect.</exception>
-        /// <response code="200">Admin registration successful.</response>
-        /// <response code="400">If the input data fails validation rules.</response>
-        /// <response code="401">If the master key is invalid.</response>
-        /// <response code="409">If the email or username is already registered.</response>
-        /// <response code="500">If an error occurs during admin registration.</response>
+        /// <param name="registerAdminDto">The data transfer object including full legal admin details and the secret master key.</param>
+        /// <returns>The newly created administrator's identity details and an active JSON Web Token.</returns>
+        /// <response code="201">Successfully created the administrator and issued a token.</response>
+        /// <response code="400">The payload failed validation or mandatory PII fields are missing.</response>
+        /// <response code="401">The provided master key is incorrect or missing.</response>
         [HttpPost("register-admin")]
+        [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> RegisterAdmin([FromBody] RegisterAdminDto registerAdminDto)
         {
             var response = await _authService.RegisterAdminAsync(registerAdminDto);
