@@ -127,19 +127,18 @@ namespace Spectrum.API.Services.Auth
                 CreatedAt = DateTime.UtcNow,
                 Role = Constants.Roles.Admin
             };
+            var createdUser = await _userRepository.AddUserAsync(user);
 
             var adminDetail = new AdminDetail
             {
                 Id = Guid.NewGuid(),
-                UserId = user.Id,
+                UserId = createdUser.Id,
                 FirstName = registerAdminDto.FirstName,
                 LastName = registerAdminDto.LastName,
                 PhoneNumber = registerAdminDto.PhoneNumber,
                 Address = registerAdminDto.Address,
                 Rfc = registerAdminDto.Rfc
             };
-
-            await _userRepository.AddUserAsync(user);
             await _adminDetailRepository.AddAdminDetailAsync(adminDetail);
 
             return new AuthResponseDto
