@@ -10,8 +10,16 @@ namespace Spectrum.Tests.IntegrationTests
 {
     public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
+        public CustomWebApplicationFactory()
+        {
+            Environment.SetEnvironmentVariable("JwtSettings__Secret", "EstaEsUnaClaveSecretaSuperLargaParaTesting123!");
+            Environment.SetEnvironmentVariable("JwtSettings__Issuer", "SpectrumAPI");
+            Environment.SetEnvironmentVariable("JwtSettings__Audience", "SpectrumClient");
+            Environment.SetEnvironmentVariable("JwtSettings__ExpirationMinutes", "60");
+            Environment.SetEnvironmentVariable("Admin__MasterKey", "MasterKey");
+        }
+
         private readonly PostgreSqlContainer _dbContainer = new PostgreSqlBuilder("postgres:16-alpine")
-            .WithImage("postgres:16-alpine")
             .WithDatabase("spectrum_test_db")
             .WithUsername("test_user")
             .WithPassword("test_password")
@@ -24,21 +32,10 @@ namespace Spectrum.Tests.IntegrationTests
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.ConfigureAppConfiguration((context, configBuilder) =>
-            {
-                configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    { "Admin:MasterKey", "MasterKey" }, 
-                    { "JwtSettings:Secret", "EstaEsUnaClaveSecretaSuperLargaParaTesting123!" },
-                    { "JwtSettings:Issuer", "SpectrumTestAPI" },
-                    { "JwtSettings:Audience", "SpectrumTestClients" }
-                });
-            });
-
             builder.ConfigureServices(services =>
             {
                 var descriptor = services.SingleOrDefault(
-                    d => d.ServiceType == typeof(DbContextOptions<SpectrumDbContext>));
+                    descriptor => descriptor.ServiceType == typeof(DbContextOptions<SpectrumDbContext>));
 
                 if (descriptor != null)
                 {
