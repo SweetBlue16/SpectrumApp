@@ -20,8 +20,8 @@ namespace Spectrum.API.Repositories
         /// Persists a new administrator detail record to the database.
         /// </summary>
         /// <param name="adminDetail">The administrator detail entity to save.</param>
-        /// <returns>A task representing the asynchronous database insert operation.</returns>
-        Task AddAdminDetailAsync(AdminDetail adminDetail);
+        /// <returns>The saved <see cref="AdminDetail"/> entity with any database-generated values populated.</returns>
+        Task<AdminDetail> AddAdminDetailAsync(AdminDetail adminDetail);
 
         /// <summary>
         /// Updates an existing administrator detail record in the database.
@@ -56,10 +56,11 @@ namespace Spectrum.API.Repositories
         }
 
         /// <inheritdoc />
-        public async Task AddAdminDetailAsync(AdminDetail adminDetail)
+        public async Task<AdminDetail> AddAdminDetailAsync(AdminDetail adminDetail)
         {
             _context.AdminDetails.Add(adminDetail);
             await _context.SaveChangesAsync();
+            return adminDetail;
         }
 
         /// <inheritdoc />
