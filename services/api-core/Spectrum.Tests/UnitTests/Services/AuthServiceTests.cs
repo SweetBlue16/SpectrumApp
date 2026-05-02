@@ -177,6 +177,12 @@ namespace Spectrum.Tests.UnitTests.Services
 
             _userRepositoryMock.Setup(r => r.EmailExistsAsync(adminDto.Email)).ReturnsAsync(false);
             _userRepositoryMock.Setup(r => r.UsernameExistsAsync(adminDto.Username)).ReturnsAsync(false);
+            _userRepositoryMock.Setup(r => r.AddUserAsync(It.IsAny<User>()))
+                .ReturnsAsync((User u) => 
+                {
+                    u.Id = Guid.NewGuid();
+                    return u;
+                });
 
             var result = await _authService.RegisterAdminAsync(adminDto);
 
