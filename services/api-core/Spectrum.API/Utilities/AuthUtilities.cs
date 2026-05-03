@@ -60,12 +60,12 @@ namespace Spectrum.API.Utilities
         {
             if (await userRepository.EmailExistsAsync(registerDto.Email))
             {
-                throw new SpectrumBusinessException("emailAlreadyRegistered");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.EmailAlreadyRegistered);
             }
 
             if (await userRepository.UsernameExistsAsync(registerDto.Username))
             {
-                throw new SpectrumBusinessException("usernameAlreadyTaken");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.UsernameAlreadyTaken);
             }
         }
 
@@ -76,16 +76,65 @@ namespace Spectrum.API.Utilities
         /// <param name="loginDto">The login attempt data containing the plain-text password.</param>
         /// <exception cref="SpectrumUnauthorizedException">Thrown if credentials match fails.</exception>
         /// <exception cref="SpectrumBusinessException">Thrown if the account is currently suspended.</exception>
-        public static void ValidateLoginInput(User user, LoginDto loginDto)
+        public static async Task ValidateLoginInput(User user, LoginDto loginDto)
         {
-            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
+            if (user == null || user.IsDeleted)
             {
-                throw new SpectrumUnauthorizedException("invalidCredentials");
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.UserNotFound);
+            }
+
+            if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidCredentials);
             }
 
             if (user.IsSuspended)
             {
-                throw new SpectrumUnauthorizedException("accountSuspended");
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.AccountSuspended);
+            }
+        }
+
+        /// <summary>
+        /// Validates the input data for registering a new administrator account, 
+        /// checking the provided secret key against the system's master key and 
+        /// ensuring all required personal details are present.
+        /// </summary>
+        /// <param name="registerAdminDto">The data transfer object containing the administrator's registration details.</param>
+        /// <param name="adminDetailRepository">The repository instance for administrator details data access.</param>
+        /// <param name="masterKey">The system's master secret key required to authorize the creation of an administrator account.</param>
+        /// <returns>A task representing the asynchronous validation operation.</returns>
+        /// <exception cref="SpectrumUnauthorizedException">Thrown if the provided admin secret key does not match the system's master key.</exception>
+        /// <exception cref="SpectrumBusinessException">Thrown if any required personal detail (first name, last name, phone number, address, RFC) is missing or whitespace.</exception>
+        public static async Task ValidateRegisterAdminInput(RegisterAdminDto registerAdminDto, IAdminDetailRepository adminDetailRepository, string masterKey)
+        {
+            if (registerAdminDto.AdminSecretKey != masterKey)
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidAdminKey);
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.FirstName))
+            {
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.LastName))
+            {
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.PhoneNumber))
+            {
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.Address))
+            {
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
+            }
+
+            if (string.IsNullOrWhiteSpace(registerAdminDto.Rfc))
+            {
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
             }
         }
     }

@@ -4,58 +4,90 @@ using Spectrum.API.Models;
 
 namespace Spectrum.API.Repositories
 {
+    /// <summary>
+    /// Defines the contract for data access operations related to the User entity.
+    /// </summary>
     public interface IUserRepository
     {
-        Task<bool> EmailExistsAsync(string email);
-        Task<bool> UsernameExistsAsync(string username);
-        Task<User> GetUserByEmailAsync(string email);
-        Task AddUserAsync(User user);
-    }
-
-    public class UserRepository : IUserRepository
-    {
-        private readonly SpectrumDbContext _context;
-
-        public UserRepository(SpectrumDbContext context)
-        {
-            _context = context;
-        }
-
-        /// <summary>
-        /// Persists a new user record to the database.
-        /// </summary>
-        /// <param name="user">The user entity to save.</param>
-        public async Task AddUserAsync(User user)
-        {
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-        }
-
         /// <summary>
         /// Checks if an email address is already present in the database.
         /// </summary>
-        /// <param name="email">The email to validate.</param>
+        /// <param name="email">The email address to validate.</param>
         /// <returns>True if the email exists, false otherwise.</returns>
-        public async Task<bool> EmailExistsAsync(string email)
-        {
-            return await _context.Users.AnyAsync(u => u.Email == email);
-        }
-
-        /// <summary>
-        /// Looks up a user record by their registered email address.
-        /// </summary>
-        /// <param name="email">The email to search for.</param>
-        /// <returns>The matching user or null.</returns>
-        public async Task<User> GetUserByEmailAsync(string email)
-        {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
-        }
+        Task<bool> EmailExistsAsync(string email);
 
         /// <summary>
         /// Checks if a username is already present in the database.
         /// </summary>
         /// <param name="username">The username to validate.</param>
         /// <returns>True if the username exists, false otherwise.</returns>
+        Task<bool> UsernameExistsAsync(string username);
+
+        /// <summary>
+        /// Retrieves a user record by their registered email address.
+        /// </summary>
+        /// <param name="email">The email address to search for.</param>
+        /// <returns>The matching <see cref="User"/> entity, or null if no user is found.</returns>
+        Task<User?> GetUserByEmailAsync(string email);
+
+        /// <summary>
+        /// Retrieves a user record by their unique system identifier.
+        /// </summary>
+        /// <param name="id">The unique identifier (GUID) of the user.</param>
+        /// <returns>The matching <see cref="User"/> entity, or null if no user is found.</returns>
+        Task<User?> GetUserByIdAsync(Guid id);
+
+        /// <summary>
+        /// Persists a newly created user record to the database.
+        /// </summary>
+        /// <param name="user">The user entity to save.</param>
+        /// <returns>The saved <see cref="User"/> entity, including any database-generated fields.</returns>
+        Task<User> AddUserAsync(User user);
+    }
+
+    /// <summary>
+    /// Implementation of the <see cref="IUserRepository"/> using Entity Framework Core.
+    /// </summary>
+    public class UserRepository : IUserRepository
+    {
+        private readonly SpectrumDbContext _context;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="UserRepository"/> class.
+        /// </summary>
+        /// <param name="context">The Entity Framework database context.</param>
+        public UserRepository(SpectrumDbContext context)
+        {
+            _context = context;
+        }
+
+        /// <inheritdoc />
+        public async Task<User> AddUserAsync(User user)
+        {
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
+            return user;
+        }
+
+        /// <inheritdoc />
+        public async Task<bool> EmailExistsAsync(string email)
+        {
+            return await _context.Users.AnyAsync(u => u.Email == email);
+        }
+
+        /// <inheritdoc />
+        public async Task<User?> GetUserByEmailAsync(string email)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
+
+        /// <inheritdoc />
+        public async Task<User?> GetUserByIdAsync(Guid id)
+        {
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+        }
+
+        /// <inheritdoc />
         public async Task<bool> UsernameExistsAsync(string username)
         {
             return await _context.Users.AnyAsync(u => u.Username == username);

@@ -4,12 +4,25 @@ using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Services.External
 {
+    /// <summary>
+    /// Defines the contract for interacting with the external video games catalog (e.g., RAWG API).
+    /// </summary>
     public interface IGameService
     {
-        Task<PagedResult<RawgGameDto>> SearchGamesAsync(GameQueyDto queryDto);
+        /// <summary>
+        /// Searches for video games based on specified filters and pagination parameters.
+        /// </summary>
+        Task<PagedResult<RawgGameDto>> SearchGamesAsync(GameQueryDto queryDto);
+
+        /// <summary>
+        /// Retrieves detailed information for a specific video game.
+        /// </summary>
         Task<RawgGameDto> GetGameDetailsAsync(int externalGameId);
     }
 
+    /// <summary>
+    /// Service implementation for communicating with the RAWG Video Games Database API.
+    /// </summary>
     public class GameService : IGameService
     {
         private readonly HttpClient _httpClient;
@@ -27,24 +40,34 @@ namespace Spectrum.API.Services.External
             _logger = logger;
         }
 
+        /// <inheritdoc />
         public async Task<RawgGameDto> GetGameDetailsAsync(int externalGameId)
         {
             try
             {
                 var requestUrl = $"{GamesEndpoint}/{externalGameId}?key={_rawgApiKey}";
                 var response = await _httpClient.GetFromJsonAsync<RawgGameDto>(requestUrl);
-                if (response == null) throw new SpectrumNotFoundException("resourceNotFound");
+                
+                if (response == null)
+                {
+                    throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
+                }
                 return response;
             }
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "Failed to get game details for external game ID: {ExternalGameId}", externalGameId);
-                if (ex.StatusCode == System.Net.HttpStatusCode.NotFound) throw new SpectrumNotFoundException("resourceNotFound");
-                throw new SpectrumBusinessException("externalCatalogUnavailable");
+
+                if (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
+                }
+                throw new SpectrumBusinessException(Constants.ErrorMessages.ExternalCatalogUnavailable);
             }
         }
 
-        public async Task<PagedResult<RawgGameDto>> SearchGamesAsync(GameQueyDto queryDto)
+        /// <inheritdoc />
+        public async Task<PagedResult<RawgGameDto>> SearchGamesAsync(GameQueryDto queryDto)
         {
             try
             {
@@ -56,7 +79,7 @@ namespace Spectrum.API.Services.External
                     ["platforms"] = queryDto.Platforms ?? "",
                     ["genres"] = queryDto.Genres ?? "",
                     ["ordering"] = queryDto.Ordering ?? "",
-                    ["page_size"] = queryDto.PageSize?.ToString(),
+                    ["page_size"] = queryDto.PageSize?.ToString() ?? DefaultPageSize.ToString(),
                     ["page"] = queryDto.Page.ToString()
                 };
 
@@ -77,7 +100,7 @@ namespace Spectrum.API.Services.External
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "Failed to search games with RAWG API");
-                throw new SpectrumBusinessException("externalCatalogUnavailable");
+                throw new SpectrumBusinessException(Constants.ErrorMessages.ExternalCatalogUnavailable);
             }
         }
     }
