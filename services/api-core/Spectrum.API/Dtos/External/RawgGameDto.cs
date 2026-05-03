@@ -5,11 +5,11 @@ namespace Spectrum.API.Dtos.External
     public class RawgGameDto
     {
         public int Id { get; set; }
-        public string Name { get; set; }
-        public string Released { get; set; }
+        public required string Name { get; set; }
+        public required string Released { get; set; }
 
         [JsonPropertyName("background_image")]
-        public string BackgroundImage { get; set; }
+        public string? BackgroundImage { get; set; }
 
         public double Rating { get; set; }
     }

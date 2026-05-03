@@ -2,13 +2,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Dtos.External;
 using Spectrum.API.Services.External;
+using Spectrum.API.Utilities; 
 
 namespace Spectrum.API.Controllers
 {
-    /// <summary>
-    /// Controller that handles interactions with the external video game catalog.
-    /// Provides search and detailed information retrieval capabilities.
-    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -16,38 +13,27 @@ namespace Spectrum.API.Controllers
     {
         private readonly IGameService _gameService;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="GamesController"/> class.
-        /// </summary>
-        /// <param name="gameService">Service for external API integration.</param>
         public GamesController(IGameService gameService)
         {
             _gameService = gameService;
         }
 
         /// <summary>
-        /// Retrieves a filtered list of video games from the external provider.
+        /// Obtiene una lista paginada de juegos.
         /// </summary>
-        /// <param name="queryDto">Filter criteria including search terms, genres, and platforms.</param>
-        /// <returns>A paginated list of games matching the criteria.</returns>
-        /// <response code="200">Returns the matching games catalog.</response>
-        /// <response code="401">If the user is not authenticated.</response>
-        /// <response code="503">If the external RAWG service is unavailable.</response>
+        /// <param name="queryDto">Parámetros de búsqueda, filtrado y paginación.</param>
+        /// <returns>Un objeto PagedResult con la lista de juegos y metadatos de paginación.</returns>
         [HttpGet("search")]
         [Authorize(Roles = "REVIEWER,ADMIN")]
         public async Task<IActionResult> Search([FromQuery] GameQueyDto queryDto)
         {
             var result = await _gameService.SearchGamesAsync(queryDto);
+            
             return Ok(result);
         }
 
         /// <summary>
-        /// Gets full technical and descriptive details for a specific game.
         /// </summary>
-        /// <param name="id">The external provider's unique game ID.</param>
-        /// <returns>Detailed game information.</returns>
-        /// <response code="200">Returns the full game details.</response>
-        /// <response code="404">If the game was not found in the external catalog.</response>
         [HttpGet("{id}")]
         public async Task<IActionResult> GetDetails(int id)
         {

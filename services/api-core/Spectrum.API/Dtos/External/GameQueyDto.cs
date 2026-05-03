@@ -15,7 +15,7 @@ namespace Spectrum.API.Dtos.External
         public string? Ordering { get; set; } = "-rating";
 
         [Range(1, 100)]
-        public int PageSize { get; set; } = 20;
+        public int? PageSize { get; set; }
 
         [Range(1, 1000)]
         public int Page { get; set; } = 1;
