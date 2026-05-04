@@ -39,6 +39,12 @@ namespace Spectrum.API.Models
         public string Email { get; set; } = string.Empty;
 
         /// <summary>
+        /// The URL or file path to the user's custom profile image. 
+        /// </summary>
+        [Column("profile_picture")] 
+        public string? ProfilePicture { get; set; }
+
+        /// <summary>
         /// The cryptographically secure hash of the user's password, generated using the BCrypt algorithm. 
         /// Never used to store plain-text or easily reversible credentials.
         /// </summary>
