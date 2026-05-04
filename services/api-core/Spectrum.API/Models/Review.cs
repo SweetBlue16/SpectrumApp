@@ -4,45 +4,36 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Spectrum.API.Models
 {
     /// <summary>
-    /// Represents a critical evaluation submitted by a user for a specific game. 
-    /// This entity forms the core of the user-generated content engine, serving as the 
-    /// aggregate root for subsequent social interactions (like votes and comments) 
-    /// that are managed in external NoSQL microservices.
+    /// Represents a critical evaluation submitted by a user for a specific external game.
+    /// The game identifier corresponds to the RAWG catalog numeric ID consumed by Spectrum.
     /// </summary>
     [Table("reviews")]
     public class Review
     {
         /// <summary>
-        /// The primary key generated as a universally unique identifier (UUID/GUID). 
-        /// Acts as the authoritative reference target for linking social interactions 
-        /// (comments, upvotes, reports) stored across distributed microservices.
+        /// Internal review identifier used as the authoritative target for votes,
+        /// comments and moderation actions.
         /// </summary>
         [Key]
         [Column("id")]
-        public Guid Id { get; set; }
+        public Guid Id { get; set; } = Guid.NewGuid();
 
         /// <summary>
-        /// The foreign key linking this review to its author. Essential for querying 
-        /// a user's activity history and enforcing authorization boundaries (e.g., 
-        /// ensuring only the author or an admin can modify or delete the review).
+        /// Author of the review.
         /// </summary>
         [Required]
         [Column("user_id")]
         public Guid UserId { get; set; }
 
         /// <summary>
-        /// The foreign key linking this review to the internal game catalog. 
-        /// Enables the aggregation of average ratings and efficient retrieval 
-        /// of all public reviews for a specific title.
+        /// External RAWG game identifier. Example: 58781.
         /// </summary>
         [Required]
         [Column("game_id")]
-        public Guid GameId { get; set; }
+        public int GameId { get; set; }
 
         /// <summary>
-        /// A quantifiable evaluation metric strictly bounded to a discrete scale (1 to 5). 
-        /// This constraint guarantees data integrity when calculating the aggregate 
-        /// score of a game across the platform.
+        /// User rating from 1 to 5.
         /// </summary>
         [Required]
         [Range(1, 5)]
@@ -50,51 +41,55 @@ namespace Spectrum.API.Models
         public int Rating { get; set; }
 
         /// <summary>
-        /// The primary textual body containing the user's critique. Expected to be 
-        /// validated against content length constraints and sanitized at the application 
-        /// layer to prevent injection attacks before persistence.
+        /// Textual content of the review.
         /// </summary>
         [Required]
+        [MinLength(1)]
+        [MaxLength(2000)]
         [Column("content")]
         public string Content { get; set; } = string.Empty;
 
         /// <summary>
-        /// An optional URI pointing to a user-uploaded image hosted on external object storage 
-        /// (e.g., AWS S3, Cloudinary). Constrained to 255 characters to optimize database row size.
+        /// Optional image URL associated with the review.
         /// </summary>
         [MaxLength(255)]
         [Column("image_url")]
-        public string ImageUrl { get; set; } = string.Empty;
+        public string? ImageUrl { get; set; }
 
         /// <summary>
-        /// Implements the "soft-delete" pattern. Allows the platform to hide the review 
-        /// from public endpoints while preserving the data for moderation audits, thereby 
-        /// avoiding the risk of cascading deletes breaking associated NoSQL social data.
+        /// Cached likes count returned from the social/voting subsystem when applicable.
+        /// </summary>
+        [Column("likes_count")]
+        public int LikesCount { get; set; }
+
+        /// <summary>
+        /// Cached dislikes count returned from the social/voting subsystem when applicable.
+        /// </summary>
+        [Column("dislikes_count")]
+        public int DislikesCount { get; set; }
+
+        /// <summary>
+        /// Soft-delete flag for moderation and auditability.
         /// </summary>
         [Column("is_deleted")]
-        public bool IsDeleted { get; set; } = false;
+        public bool IsDeleted { get; set; }
 
         /// <summary>
-        /// The UTC timestamp marking the exact moment the review was published. 
-        /// Used for sorting activity feeds chronologically and managing cache invalidation.
+        /// Creation timestamp in UTC.
         /// </summary>
         [Column("created_at")]
-        public DateTime CreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         /// <summary>
-        /// Entity Framework navigation property establishing a many-to-one relationship 
-        /// with the <see cref="Models.User"/> entity. Facilitates eager or explicit loading 
-        /// of the author's profile details.
+        /// Last update timestamp in UTC.
         /// </summary>
-        [ForeignKey("UserId")]
+        [Column("updated_at")]
+        public DateTime? UpdatedAt { get; set; }
+
+        /// <summary>
+        /// Review author navigation property.
+        /// </summary>
+        [ForeignKey(nameof(UserId))]
         public virtual User? User { get; set; }
-
-        /// <summary>
-        /// Entity Framework navigation property establishing a many-to-one relationship 
-        /// with the <see cref="Models.Game"/> entity. Essential for navigating from a 
-        /// user's review back to the game's metadata.
-        /// </summary>
-        [ForeignKey("GameId")]
-        public virtual Game Game { get; set; } = null!;
     }
 }

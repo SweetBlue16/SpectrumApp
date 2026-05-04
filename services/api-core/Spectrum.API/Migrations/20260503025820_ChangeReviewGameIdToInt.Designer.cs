@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Spectrum.API.Data;
@@ -11,9 +12,11 @@ using Spectrum.API.Data;
 namespace Spectrum.API.Migrations
 {
     [DbContext(typeof(SpectrumDbContext))]
-    partial class SpectrumDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260503025820_ChangeReviewGameIdToInt")]
+    partial class ChangeReviewGameIdToInt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -132,6 +135,9 @@ namespace Spectrum.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("game_id");
 
+                    b.Property<Guid?>("GameId1")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
@@ -158,6 +164,8 @@ namespace Spectrum.API.Migrations
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("GameId1");
 
                     b.HasIndex("UserId");
 
@@ -227,6 +235,10 @@ namespace Spectrum.API.Migrations
 
             modelBuilder.Entity("Spectrum.API.Models.Review", b =>
                 {
+                    b.HasOne("Spectrum.API.Models.Game", null)
+                        .WithMany("Reviews")
+                        .HasForeignKey("GameId1");
+
                     b.HasOne("Spectrum.API.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -234,6 +246,11 @@ namespace Spectrum.API.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Spectrum.API.Models.Game", b =>
+                {
+                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("Spectrum.API.Models.User", b =>

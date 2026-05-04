@@ -5,13 +5,13 @@ namespace Spectrum.API.Data
 {
     /// <summary>
     /// Represents the primary Entity Framework Core session with the relational database.
-    /// Responsible for coordinating the Unit of Work, managing entity states, and 
+    /// Responsible for coordinating the Unit of Work, managing entity states, and
     /// enforcing referential integrity and database-level constraints.
     /// </summary>
     public class SpectrumDbContext : DbContext
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="SpectrumDbContext"/> class 
+        /// Initializes a new instance of the <see cref="SpectrumDbContext"/> class
         /// with the specified configuration options.
         /// </summary>
         /// <param name="options">The configuration options for this context instance, such as the database provider.</param>
@@ -40,7 +40,7 @@ namespace Spectrum.API.Data
         public DbSet<AdminDetail> AdminDetails { get; set; }
 
         /// <summary>
-        /// Configures the relational database schema, entity relationships, and global query filters 
+        /// Configures the relational database schema, entity relationships, and global query filters
         /// using the Fluent API. These configurations override data annotation attributes.
         /// </summary>
         /// <param name="modelBuilder">The builder used to construct the database schema model.</param>
@@ -48,30 +48,41 @@ namespace Spectrum.API.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<User>().HasQueryFilter(u => !u.IsDeleted);
-            modelBuilder.Entity<Review>().HasQueryFilter(r => !r.IsDeleted);
+            modelBuilder.Entity<User>().HasQueryFilter(user => !user.IsDeleted);
+            modelBuilder.Entity<Review>().HasQueryFilter(review => !review.IsDeleted);
 
             modelBuilder.Entity<AdminDetail>()
-                .HasOne(ad => ad.User)
-                .WithOne(u => u.AdminDetail)
-                .HasForeignKey<AdminDetail>(ad => ad.UserId)
+                .HasOne(adminDetail => adminDetail.User)
+                .WithOne(user => user.AdminDetail)
+                .HasForeignKey<AdminDetail>(adminDetail => adminDetail.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<User>()
-                .HasIndex(u => u.Email)
+                .HasIndex(user => user.Email)
                 .IsUnique();
 
             modelBuilder.Entity<Review>()
-                .HasOne(r => r.User)
+                .HasOne(review => review.User)
                 .WithMany()
-                .HasForeignKey(r => r.UserId)
+                .HasForeignKey(review => review.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Review>()
-                .HasOne(r => r.Game)
-                .WithMany(g => g.Reviews)
-                .HasForeignKey(r => r.GameId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .Property(review => review.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            modelBuilder.Entity<Review>()
+                .Property(review => review.UpdatedAt)
+                .HasColumnName("updated_at");
+
+            modelBuilder.Entity<Review>()
+                .Property(review => review.LikesCount)
+                .HasColumnName("likes_count");
+
+            modelBuilder.Entity<Review>()
+                .Property(review => review.DislikesCount)
+                .HasColumnName("dislikes_count");
         }
     }
 }

@@ -9,6 +9,8 @@ using Spectrum.API.Middlewares;
 using Spectrum.API.Repositories;
 using Spectrum.API.Services.Auth;
 using Spectrum.API.Services.External;
+using Spectrum.API.Services.Reviews;
+using Spectrum.API.Services.Votes;
 using System.Reflection;
 using System.Text;
 
@@ -43,7 +45,10 @@ builder.Services.AddDbContext<SpectrumDbContext>(options =>
 Console.WriteLine("[SPECTRUM API] Registering repositories and services...");
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAdminDetailRepository, AdminDetailRepository>();
+builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IVoteService, VoteServiceClient>();
 
 Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
 builder.Services.AddHttpClient<IGameService, GameService>(client =>
