@@ -7,4 +7,6 @@ import java.util.Optional;
 
 public interface VoteRepository extends MongoRepository<Vote, String> {
     Optional<Vote> findByUserIdAndTargetIdAndTargetType(String userId, String targetId, String targetType);
+
+    long countByTargetIdAndTargetTypeAndPositive(String targetId, String targetType, boolean positive);
 }
