@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Spectrum.API.Data;
@@ -11,9 +12,11 @@ using Spectrum.API.Data;
 namespace Spectrum.API.Migrations
 {
     [DbContext(typeof(SpectrumDbContext))]
-    partial class SpectrumDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260505012954_AddReviewCountersAndUpdatedAt")]
+    partial class AddReviewCountersAndUpdatedAt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -193,10 +196,6 @@ namespace Spectrum.API.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
-
-                    b.Property<string>("ProfilePicture")
-                        .HasColumnType("text")
-                        .HasColumnName("profile_picture");
 
                     b.Property<string>("Role")
                         .IsRequired()

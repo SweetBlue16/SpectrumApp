@@ -19,5 +19,9 @@ namespace Spectrum.API.Dtos.Reviews
         public string ImageUrl { get; set; } = string.Empty;
 
         public DateTime CreatedAt { get; set; }
+
+        public int LikesCount { get; set; }
+
+        public int DislikesCount { get; set; }
     }
 }

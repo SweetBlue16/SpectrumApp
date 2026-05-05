@@ -25,7 +25,6 @@ namespace Spectrum.API.Repositories
         public async Task<Review> AddAsync(Review review)
         {
             await _context.Reviews.AddAsync(review);
-            await _context.SaveChangesAsync();
 
             return review;
         }
@@ -34,7 +33,7 @@ namespace Spectrum.API.Repositories
         {
             return await _context.Reviews
                 .Include(review => review.User)
-                .Where(review => review.GameId == gameId && !review.IsDeleted)
+                .Where(review => review.GameId == gameId)
                 .OrderByDescending(review => review.CreatedAt)
                 .ToListAsync();
         }
@@ -43,14 +42,14 @@ namespace Spectrum.API.Repositories
         {
             return await _context.Reviews
                 .Include(review => review.User)
-                .FirstOrDefaultAsync(review => review.Id == id && !review.IsDeleted);
+                .FirstOrDefaultAsync(review => review.Id == id);
         }
 
         public async Task<IReadOnlyList<Review>> GetByUserIdAsync(Guid userId)
         {
             return await _context.Reviews
                 .Include(review => review.User)
-                .Where(review => review.UserId == userId && !review.IsDeleted)
+                .Where(review => review.UserId == userId)
                 .OrderByDescending(review => review.CreatedAt)
                 .ToListAsync();
         }
