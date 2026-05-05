@@ -20,6 +20,12 @@ namespace Spectrum.API.Services.Reviews
         private const string ReviewNotFoundMessage = "La reseña solicitada no existe.";
         private const string ForbiddenActionMessage = "No tienes permisos para realizar esta acción.";
 
+        private const int MinimumGameId = 1;
+        private const int MinimumRating = 1;
+        private const int MaximumRating = 5;
+        private const int MaximumContentLength = 2000;
+        private const int MaximumImageUrlLength = 255;
+
         private readonly IReviewRepository _reviewRepository;
 
         public ReviewService(IReviewRepository reviewRepository)
@@ -29,19 +35,27 @@ namespace Spectrum.API.Services.Reviews
 
         public async Task<ReviewResponseDto> CreateAsync(CreateReviewDto dto, Guid userId)
         {
+            ValidateGameId(dto.GameId);
+            ValidateRating(dto.Rating);
+            var content = NormalizeContent(dto.Content);
+            ValidateImageUrl(dto.ImageUrl);
+
             var review = new Review
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 GameId = dto.GameId,
                 Rating = dto.Rating,
-                Content = dto.Content.Trim(),
+                Content = content,
                 ImageUrl = dto.ImageUrl,
+                LikesCount = 0,
+                DislikesCount = 0,
                 CreatedAt = DateTime.UtcNow,
                 IsDeleted = false
             };
 
             var createdReview = await _reviewRepository.AddAsync(review);
+            await _reviewRepository.SaveChangesAsync();
 
             return MapToResponseDto(createdReview);
         }
@@ -60,6 +74,8 @@ namespace Spectrum.API.Services.Reviews
 
         public async Task<IReadOnlyList<ReviewResponseDto>> GetByGameIdAsync(int gameId)
         {
+            ValidateGameId(gameId);
+
             var reviews = await _reviewRepository.GetByGameIdAsync(gameId);
 
             return reviews
@@ -92,21 +108,23 @@ namespace Spectrum.API.Services.Reviews
 
             if (!isAdmin && review.UserId != userId)
             {
-                throw new UnauthorizedAccessException(ForbiddenActionMessage);
+                throw new SpectrumUnauthorizedException(ForbiddenActionMessage);
             }
 
             if (dto.Rating.HasValue)
             {
+                ValidateRating(dto.Rating.Value);
                 review.Rating = dto.Rating.Value;
             }
 
-            if (!string.IsNullOrWhiteSpace(dto.Content))
+            if (dto.Content is not null)
             {
-                review.Content = dto.Content.Trim();
+                review.Content = NormalizeContent(dto.Content);
             }
 
             if (dto.ImageUrl is not null)
             {
+                ValidateImageUrl(dto.ImageUrl);
                 review.ImageUrl = dto.ImageUrl;
             }
 
@@ -126,7 +144,7 @@ namespace Spectrum.API.Services.Reviews
 
             if (!isAdmin && review.UserId != userId)
             {
-                throw new UnauthorizedAccessException(ForbiddenActionMessage);
+                throw new SpectrumUnauthorizedException(ForbiddenActionMessage);
             }
 
             review.IsDeleted = true;
@@ -147,8 +165,51 @@ namespace Spectrum.API.Services.Reviews
                 Rating = review.Rating,
                 Content = review.Content,
                 ImageUrl = review.ImageUrl ?? string.Empty,
-                CreatedAt = review.CreatedAt
+                CreatedAt = review.CreatedAt,
+                LikesCount = review.LikesCount,
+                DislikesCount = review.DislikesCount
             };
+        }
+
+        private static void ValidateGameId(int gameId)
+        {
+            if (gameId < MinimumGameId)
+            {
+                throw new SpectrumBusinessException("El ID del videojuego debe ser válido.");
+            }
+        }
+
+        private static void ValidateRating(int rating)
+        {
+            if (rating is < MinimumRating or > MaximumRating)
+            {
+                throw new SpectrumBusinessException("La calificación debe estar entre 1 y 5.");
+            }
+        }
+
+        private static string NormalizeContent(string? content)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                throw new SpectrumBusinessException("El contenido de la reseña es obligatorio.");
+            }
+
+            var normalizedContent = content.Trim();
+
+            if (normalizedContent.Length > MaximumContentLength)
+            {
+                throw new SpectrumBusinessException("El contenido de la reseña no puede superar los 2000 caracteres.");
+            }
+
+            return normalizedContent;
+        }
+
+        private static void ValidateImageUrl(string? imageUrl)
+        {
+            if (imageUrl is not null && imageUrl.Length > MaximumImageUrlLength)
+            {
+                throw new SpectrumBusinessException("La URL de la imagen no puede superar los 255 caracteres.");
+            }
         }
     }
 }
