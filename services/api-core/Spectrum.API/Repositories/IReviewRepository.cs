@@ -10,6 +10,7 @@ namespace Spectrum.API.Repositories
         Task<IReadOnlyList<Review>> GetByGameIdAsync(int gameId);
         Task<IReadOnlyList<Review>> GetByUserIdAsync(Guid userId);
         Task<Review> AddAsync(Review review);
+        Task UpdateCountersAsync(Guid reviewId, int likesCount, int dislikesCount);
         Task SaveChangesAsync();
     }
 
@@ -52,6 +53,20 @@ namespace Spectrum.API.Repositories
                 .Where(review => review.UserId == userId)
                 .OrderByDescending(review => review.CreatedAt)
                 .ToListAsync();
+        }
+
+        public async Task UpdateCountersAsync(Guid reviewId, int likesCount, int dislikesCount)
+        {
+            var review = await _context.Reviews.FirstOrDefaultAsync(review => review.Id == reviewId);
+
+            if (review is null)
+            {
+                return;
+            }
+
+            review.LikesCount = likesCount;
+            review.DislikesCount = dislikesCount;
+            review.UpdatedAt = DateTime.UtcNow;
         }
 
         public async Task SaveChangesAsync()
