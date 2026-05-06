@@ -26,7 +26,8 @@ namespace Spectrum.API.Utilities
         /// </remarks>
         public static string GenerateJwtToken(User user, IConfiguration configuration)
         {
-            var secretKey = configuration["JwtSettings:Secret"];
+            var secretKey = configuration["JwtSettings:Secret"]
+                ?? throw new InvalidOperationException("JwtSettings:Secret is not configured.");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -76,7 +77,7 @@ namespace Spectrum.API.Utilities
         /// <param name="loginDto">The login attempt data containing the plain-text password.</param>
         /// <exception cref="SpectrumUnauthorizedException">Thrown if credentials match fails.</exception>
         /// <exception cref="SpectrumBusinessException">Thrown if the account is currently suspended.</exception>
-        public static async Task ValidateLoginInput(User user, LoginDto loginDto)
+        public static async Task ValidateLoginInput(User? user, LoginDto loginDto)
         {
             if (user == null || user.IsDeleted)
             {
@@ -105,8 +106,13 @@ namespace Spectrum.API.Utilities
         /// <returns>A task representing the asynchronous validation operation.</returns>
         /// <exception cref="SpectrumUnauthorizedException">Thrown if the provided admin secret key does not match the system's master key.</exception>
         /// <exception cref="SpectrumBusinessException">Thrown if any required personal detail (first name, last name, phone number, address, RFC) is missing or whitespace.</exception>
-        public static async Task ValidateRegisterAdminInput(RegisterAdminDto registerAdminDto, IAdminDetailRepository adminDetailRepository, string masterKey)
+        public static async Task ValidateRegisterAdminInput(RegisterAdminDto registerAdminDto, IAdminDetailRepository adminDetailRepository, string? masterKey)
         {
+            if (string.IsNullOrWhiteSpace(masterKey))
+            {
+                throw new InvalidOperationException("Admin:MasterKey is not configured.");
+            }
+
             if (registerAdminDto.AdminSecretKey != masterKey)
             {
                 throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidAdminKey);

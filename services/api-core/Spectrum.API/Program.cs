@@ -49,18 +49,25 @@ builder.Services.AddScoped<IAdminDetailRepository, AdminDetailRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
+<<<<<<< HEAD
 builder.Services.AddScoped<IProfileService, ProfileService>();
+=======
+builder.Services.AddScoped<IReviewCommentService, ReviewCommentService>();
+>>>>>>> bca1fb2 (feat(reviews): add ownership checks and comments API)
 builder.Services.AddScoped<IVoteService, VoteServiceClient>();
 
 Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
+var rawgBaseUrl = builder.Configuration["RawgApi:BaseUrl"]
+    ?? throw new InvalidOperationException("RawgApi:BaseUrl is not configured.");
 builder.Services.AddHttpClient<IGameService, GameService>(client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["RawgApi:BaseUrl"]);
+    client.BaseAddress = new Uri(rawgBaseUrl);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
 Console.WriteLine("[SPECTRUM API] Configuring JWT Authentication...");
-var jwtSecret = builder.Configuration["JwtSettings:Secret"];
+var jwtSecret = builder.Configuration["JwtSettings:Secret"]
+    ?? throw new InvalidOperationException("JwtSettings:Secret is not configured.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

@@ -52,6 +52,13 @@ namespace Spectrum.API.Middlewares
                     problemDetails.Detail = ex.Message;
                     break;
 
+                case SpectrumForbiddenException ex:
+                    httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    problemDetails.Title = "Forbidden";
+                    problemDetails.Status = StatusCodes.Status403Forbidden;
+                    problemDetails.Detail = ex.Message;
+                    break;
+
                 case SpectrumNotFoundException ex:
                     httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
                     problemDetails.Title = "Resource not found";
