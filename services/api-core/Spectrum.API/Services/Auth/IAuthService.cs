@@ -103,12 +103,13 @@ namespace Spectrum.API.Services.Auth
         {
             var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
             await AuthUtilities.ValidateLoginInput(user, loginDto);
+            var authenticatedUser = user!;
 
             return new AuthResponseDto
             {
-                Token = AuthUtilities.GenerateJwtToken(user, _configuration),
-                Username = user.Username,
-                Email = user.Email
+                Token = AuthUtilities.GenerateJwtToken(authenticatedUser, _configuration),
+                Username = authenticatedUser.Username,
+                Email = authenticatedUser.Email
             };
         }
 

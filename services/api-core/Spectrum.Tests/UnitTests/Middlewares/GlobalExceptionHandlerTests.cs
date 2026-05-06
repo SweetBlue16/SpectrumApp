@@ -55,6 +55,23 @@ namespace Spectrum.Tests.UnitTests.Middlewares
         }
 
         [Fact]
+        public async Task TestTryHandleAsyncWhenSpectrumForbiddenExceptionShouldReturn403ProblemDetails()
+        {
+            var context = SetupHttpContext();
+            var exception = new SpectrumForbiddenException("Forbidden action");
+
+            var result = await _handler.TryHandleAsync(context, exception, CancellationToken.None);
+            var problemDetails = await GetProblemDetailsFromResponse(context);
+
+            Assert.True(result);
+            Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
+            Assert.NotNull(problemDetails);
+            Assert.Equal("Forbidden", problemDetails.Title);
+            Assert.Equal(StatusCodes.Status403Forbidden, problemDetails.Status);
+            Assert.Equal(exception.Message, problemDetails.Detail);
+        }
+
+        [Fact]
         public async Task TestTryHandleAsyncWhenSpectrumBusinessExceptionShouldReturn400ProblemDetails()
         {
             var context = SetupHttpContext();

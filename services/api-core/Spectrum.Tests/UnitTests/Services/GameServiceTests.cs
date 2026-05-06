@@ -108,8 +108,8 @@ namespace Spectrum.Tests.UnitTests.Services
             var result = await gameService.SearchGamesAsync(queryDto);
 
             Assert.NotNull(result);
-            Assert.Single(result);
-            Assert.Equal("Halo: Combat Evolved", result.First().Name);
+            Assert.Single(result.Items);
+            Assert.Equal("Halo: Combat Evolved", result.Items.First().Name);
         }
 
         [Fact]
@@ -123,7 +123,7 @@ namespace Spectrum.Tests.UnitTests.Services
             var result = await gameService.SearchGamesAsync(queryDto);
 
             Assert.NotNull(result);
-            Assert.Empty(result);
+            Assert.Empty(result.Items);
         }
 
         [Fact]
@@ -138,10 +138,10 @@ namespace Spectrum.Tests.UnitTests.Services
             var result = await gameService.SearchGamesAsync(queryDto);
 
             Assert.NotNull(result);
-            Assert.Empty(result);
+            Assert.Empty(result.Items);
         }
 
-        private HttpClient CreateMockHttpClient(HttpStatusCode statusCode, object responseContent)
+        private HttpClient CreateMockHttpClient(HttpStatusCode statusCode, object? responseContent)
         {
             var handlerMock = new Mock<HttpMessageHandler>(MockBehavior.Strict);
             handlerMock

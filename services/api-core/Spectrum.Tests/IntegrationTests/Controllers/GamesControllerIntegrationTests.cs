@@ -47,19 +47,26 @@ namespace Spectrum.Tests.IntegrationTests.Controllers
             {
                 new RawgGameDto { Id = 1, Name = "Mocked Game" }
             };
+            var expectedResult = new PagedResult<RawgGameDto>
+            {
+                Items = expectedGames,
+                TotalCount = expectedGames.Count,
+                Page = 1,
+                PageSize = 10
+            };
 
             _gameServiceMock
                 .Setup(s => s.SearchGamesAsync(It.IsAny<GameQueryDto>()))
-                .ReturnsAsync(expectedGames);
+                .ReturnsAsync(expectedResult);
 
             var response = await _client.GetAsync("/api/games/search?search=Mocked&pageSize=10");
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            var data = await response.Content.ReadFromJsonAsync<List<RawgGameDto>>();
+            var data = await response.Content.ReadFromJsonAsync<PagedResult<RawgGameDto>>();
             Assert.NotNull(data);
-            Assert.Single(data);
-            Assert.Equal("Mocked Game", data[0].Name);
+            Assert.Single(data.Items);
+            Assert.Equal("Mocked Game", data.Items.First().Name);
         }
 
         [Fact]

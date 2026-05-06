@@ -29,7 +29,7 @@ namespace Spectrum.Tests.UnitTests.Utilities
             var loginDto = new LoginDto { Password = "AnyPassword" };
 
             var exception = await Assert.ThrowsAsync<SpectrumUnauthorizedException>(() =>
-                AuthUtilities.ValidateLoginInput(nullUser!, loginDto));
+                AuthUtilities.ValidateLoginInput(nullUser, loginDto));
 
             Assert.Equal(Constants.ErrorMessages.UserNotFound, exception.Message);
         }
@@ -137,7 +137,7 @@ namespace Spectrum.Tests.UnitTests.Utilities
         [InlineData("FirstName", "LastName", "1234567890", null, "RFC123")]
         [InlineData("FirstName", "LastName", "1234567890", "Address", "")]
         public async Task TestValidateRegisterAdminInputWhenMissingRequiredFieldsShouldThrowSpectrumBusinessException(
-            string firstName, string lastName, string phone, string address, string rfc)
+            string firstName, string lastName, string phone, string? address, string rfc)
         {
             var masterKey = "ValidKey";
             var dto = new RegisterAdminDto
@@ -146,7 +146,7 @@ namespace Spectrum.Tests.UnitTests.Utilities
                 FirstName = firstName,
                 LastName = lastName,
                 PhoneNumber = phone,
-                Address = address,
+                Address = address ?? string.Empty,
                 Rfc = rfc
             };
 

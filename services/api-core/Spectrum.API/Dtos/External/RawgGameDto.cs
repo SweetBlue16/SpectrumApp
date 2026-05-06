@@ -16,12 +16,12 @@ namespace Spectrum.API.Dtos.External
         /// <summary>
         /// The official title of the video game.
         /// </summary>
-        public required string Name { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// The release date of the game, formatted as a string (usually YYYY-MM-DD).
         /// </summary>
-        public required string Released { get; set; } = string.Empty;
+        public string Released { get; set; } = string.Empty;
 
         /// <summary>
         /// The URL pointing to the game's primary background or cover image hosted by RAWG.
