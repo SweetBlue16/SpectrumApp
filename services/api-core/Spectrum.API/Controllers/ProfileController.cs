@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Dtos.Profile;
-using Spectrum.API.Repositories;
+using Spectrum.API.Services.Profile;
 using System.Security.Claims;
 
 namespace Spectrum.API.Controllers
@@ -11,11 +11,11 @@ namespace Spectrum.API.Controllers
     [Authorize]
     public class ProfileController : ControllerBase
     {
-        private readonly IUserRepository _userRepository;
+        private readonly IProfileService profileService; // Sin guion bajo
 
-        public ProfileController(IUserRepository userRepository)
+        public ProfileController(IProfileService profileService)
         {
-            _userRepository = userRepository;
+            this.profileService = profileService;
         }
 
         /// <summary>
@@ -29,17 +29,12 @@ namespace Spectrum.API.Controllers
             if (string.IsNullOrEmpty(email))
                 return Unauthorized();
 
-            var user = await _userRepository.GetUserByEmailAsync(email);
+            var profile = await profileService.GetUserProfileByEmailAsync(email);
 
-            if (user == null)
+            if (profile == null)
                 return NotFound();
 
-            return Ok(new UserProfileDto
-            {
-                Username = user.Username, 
-                Email = user.Email,       
-                ProfilePicture = user.ProfilePicture 
-            });
+            return Ok(profile);
         }
     }
 }
