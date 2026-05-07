@@ -49,11 +49,8 @@ builder.Services.AddScoped<IAdminDetailRepository, AdminDetailRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
-<<<<<<< HEAD
 builder.Services.AddScoped<IProfileService, ProfileService>();
-=======
 builder.Services.AddScoped<IReviewCommentService, ReviewCommentService>();
->>>>>>> bca1fb2 (feat(reviews): add ownership checks and comments API)
 builder.Services.AddScoped<IVoteService, VoteServiceClient>();
 
 Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
