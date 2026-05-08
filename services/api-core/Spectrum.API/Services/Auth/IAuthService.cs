@@ -94,7 +94,8 @@ namespace Spectrum.API.Services.Auth
             {
                 Token = AuthUtilities.GenerateJwtToken(user, _configuration),
                 Username = user.Username,
-                Email = user.Email
+                Email = user.Email,
+                Role = user.Role
             };
         }
 
@@ -109,14 +110,15 @@ namespace Spectrum.API.Services.Auth
             {
                 Token = AuthUtilities.GenerateJwtToken(authenticatedUser, _configuration),
                 Username = authenticatedUser.Username,
-                Email = authenticatedUser.Email
+                Email = authenticatedUser.Email,
+                Role = authenticatedUser.Role
             };
         }
 
         /// <inheritdoc />
         public async Task<AuthResponseDto> RegisterAdminAsync(RegisterAdminDto registerAdminDto)
         {
-            var masterKey = _configuration["Admin:MasterKey"];
+            var masterKey = _configuration["AdminSettings:MasterKey"];
             await AuthUtilities.ValidateRegisterInput(registerAdminDto, _userRepository);
             await AuthUtilities.ValidateRegisterAdminInput(registerAdminDto, _adminDetailRepository, masterKey);
 
@@ -146,7 +148,8 @@ namespace Spectrum.API.Services.Auth
             {
                 Token = AuthUtilities.GenerateJwtToken(user, _configuration),
                 Username = user.Username,
-                Email = user.Email
+                Email = user.Email,
+                Role = user.Role
             };
         }
 
@@ -170,7 +173,8 @@ namespace Spectrum.API.Services.Auth
             {
                 Token = AuthUtilities.GenerateJwtToken(user, _configuration),
                 Username = user.Username,
-                Email = user.Email
+                Email = user.Email,
+                Role = user.Role
             };
         }
 
@@ -192,6 +196,7 @@ namespace Spectrum.API.Services.Auth
                     Email = payload.Email,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
                     CreatedAt = DateTime.UtcNow,
+                    Role = Constants.Roles.Reviewer,
                     IsSuspended = false,
                     IsDeleted = false
                 };
