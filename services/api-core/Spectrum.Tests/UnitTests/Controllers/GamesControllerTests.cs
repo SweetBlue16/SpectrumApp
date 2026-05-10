@@ -4,6 +4,7 @@ using Moq;
 using Spectrum.API.Controllers;
 using Spectrum.API.Dtos.External;
 using Spectrum.API.Services.External;
+using Spectrum.API.Utilities;
 
 namespace Spectrum.Tests.UnitTests.Controllers
 {
@@ -27,16 +28,23 @@ namespace Spectrum.Tests.UnitTests.Controllers
                 new RawgGameDto { Id = 1, Name = "Halo: Combat Evolved" },
                 new RawgGameDto { Id = 2, Name = "Halo 2" }
             };
+            var expectedResult = new PagedResult<RawgGameDto>
+            {
+                Items = expectedGames,
+                TotalCount = expectedGames.Count,
+                Page = 1,
+                PageSize = 10
+            };
 
-            _gameServiceMock.Setup(s => s.SearchGamesAsync(queryDto)).ReturnsAsync(expectedGames);
+            _gameServiceMock.Setup(s => s.SearchGamesAsync(queryDto)).ReturnsAsync(expectedResult);
 
             var result = await _gamesController.Search(queryDto);
 
             var okResult = Assert.IsType<OkObjectResult>(result);
             Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
 
-            var returnedGames = Assert.IsAssignableFrom<IEnumerable<RawgGameDto>>(okResult.Value);
-            Assert.Equal(2, returnedGames.Count());
+            var returnedResult = Assert.IsType<PagedResult<RawgGameDto>>(okResult.Value);
+            Assert.Equal(2, returnedResult.Items.Count());
 
             _gameServiceMock.Verify(s => s.SearchGamesAsync(queryDto), Times.Once);
         }
@@ -45,17 +53,23 @@ namespace Spectrum.Tests.UnitTests.Controllers
         public async Task TestSearchWhenNoResultsShouldReturnOkWithEmptyCollection()
         {
             var queryDto = new GameQueryDto { Search = "NonExistentGame" };
-            var expectedGames = Enumerable.Empty<RawgGameDto>();
+            var expectedResult = new PagedResult<RawgGameDto>
+            {
+                Items = Enumerable.Empty<RawgGameDto>(),
+                TotalCount = 0,
+                Page = 1,
+                PageSize = 20
+            };
 
-            _gameServiceMock.Setup(s => s.SearchGamesAsync(queryDto)).ReturnsAsync(expectedGames);
+            _gameServiceMock.Setup(s => s.SearchGamesAsync(queryDto)).ReturnsAsync(expectedResult);
 
             var result = await _gamesController.Search(queryDto);
 
             var okResult = Assert.IsType<OkObjectResult>(result);
             Assert.Equal(StatusCodes.Status200OK, okResult.StatusCode);
 
-            var returnedGames = Assert.IsAssignableFrom<IEnumerable<RawgGameDto>>(okResult.Value);
-            Assert.Empty(returnedGames);
+            var returnedResult = Assert.IsType<PagedResult<RawgGameDto>>(okResult.Value);
+            Assert.Empty(returnedResult.Items);
 
             _gameServiceMock.Verify(s => s.SearchGamesAsync(queryDto), Times.Once);
         }

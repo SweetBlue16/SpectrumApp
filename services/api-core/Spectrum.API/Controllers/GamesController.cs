@@ -52,8 +52,6 @@ namespace Spectrum.API.Controllers
         }
 
         /// <summary>
-        /// </summary>
-
         /// Retrieves comprehensive technical, graphical, and descriptive metadata for a specific video game.
         /// </summary>
         /// <param name="id">The unique identifier assigned by the external game database.</param>

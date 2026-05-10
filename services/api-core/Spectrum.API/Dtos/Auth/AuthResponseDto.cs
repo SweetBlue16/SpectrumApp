@@ -24,5 +24,11 @@ namespace Spectrum.API.Dtos.Auth
         /// </summary>
         [Required]
         public string Email { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The authenticated user's role within the application.
+        /// </summary>
+        [Required]
+        public string Role { get; set; } = string.Empty;
     }
 }

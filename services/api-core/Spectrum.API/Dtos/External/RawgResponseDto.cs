@@ -24,6 +24,6 @@
         /// <summary>
         /// The collection of games returned for the current page.
         /// </summary>
-        public List<RawgGameDto> Results { get; set; } = [];
+        public List<RawgGameDto>? Results { get; set; } = [];
     }
 }

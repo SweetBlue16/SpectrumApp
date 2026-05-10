@@ -6,11 +6,12 @@ namespace Spectrum.API.Repositories
 {
     public interface IReviewRepository
     {
-        Task<Review?> GetByIdAsync(Guid id);
-        Task<IReadOnlyList<Review>> GetByGameIdAsync(int gameId);
-        Task<IReadOnlyList<Review>> GetByUserIdAsync(Guid userId);
-        Task<Review> AddAsync(Review review);
-        Task SaveChangesAsync();
+        Task<Review?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<Review>> GetByGameIdAsync(int gameId, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<Review>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
+        Task<Review> AddAsync(Review review, CancellationToken cancellationToken = default);
+        Task UpdateCountersAsync(Guid reviewId, int likesCount, int dislikesCount, CancellationToken cancellationToken = default);
+        Task SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 
     public class ReviewRepository : IReviewRepository
@@ -22,42 +23,63 @@ namespace Spectrum.API.Repositories
             _context = context;
         }
 
-        public async Task<Review> AddAsync(Review review)
+        public async Task<Review> AddAsync(Review review, CancellationToken cancellationToken = default)
         {
-            await _context.Reviews.AddAsync(review);
-            await _context.SaveChangesAsync();
+            await _context.Reviews.AddAsync(review, cancellationToken);
 
             return review;
         }
 
-        public async Task<IReadOnlyList<Review>> GetByGameIdAsync(int gameId)
+        public async Task<IReadOnlyList<Review>> GetByGameIdAsync(int gameId, CancellationToken cancellationToken = default)
         {
             return await _context.Reviews
                 .Include(review => review.User)
-                .Where(review => review.GameId == gameId && !review.IsDeleted)
+                .Where(review => review.GameId == gameId)
                 .OrderByDescending(review => review.CreatedAt)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
         }
 
-        public async Task<Review?> GetByIdAsync(Guid id)
+        public async Task<Review?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             return await _context.Reviews
                 .Include(review => review.User)
-                .FirstOrDefaultAsync(review => review.Id == id && !review.IsDeleted);
+                .FirstOrDefaultAsync(review => review.Id == id, cancellationToken);
         }
 
-        public async Task<IReadOnlyList<Review>> GetByUserIdAsync(Guid userId)
+        public async Task<IReadOnlyList<Review>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             return await _context.Reviews
                 .Include(review => review.User)
-                .Where(review => review.UserId == userId && !review.IsDeleted)
+                .Where(review => review.UserId == userId)
                 .OrderByDescending(review => review.CreatedAt)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
         }
 
-        public async Task SaveChangesAsync()
+        public async Task UpdateCountersAsync(
+            Guid reviewId,
+            int likesCount,
+            int dislikesCount,
+            CancellationToken cancellationToken = default
+        )
         {
-            await _context.SaveChangesAsync();
+            var review = await _context.Reviews.FirstOrDefaultAsync(
+                review => review.Id == reviewId,
+                cancellationToken
+            );
+
+            if (review is null)
+            {
+                return;
+            }
+
+            review.LikesCount = likesCount;
+            review.DislikesCount = dislikesCount;
+            review.UpdatedAt = DateTime.UtcNow;
+        }
+
+        public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
         }
     }
 }
