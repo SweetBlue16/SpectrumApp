@@ -38,6 +38,16 @@ namespace Spectrum.API.Repositories
         Task<User?> GetUserByIdAsync(Guid id);
 
         /// <summary>
+        /// Retrieves a user record including its related interested games and platforms.
+        /// </summary>
+        Task<User?> GetUserWithProfileDataAsync(Guid id);
+
+        /// <summary>
+        /// Updates an existing user record in the database.
+        /// </summary>
+        Task UpdateUserAsync(User user);
+
+        /// <summary>
         /// Persists a newly created user record to the database.
         /// </summary>
         /// <param name="user">The user entity to save.</param>
@@ -70,6 +80,13 @@ namespace Spectrum.API.Repositories
         }
 
         /// <inheritdoc />
+        public async Task UpdateUserAsync(User user)
+        {
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+        }
+
+        /// <inheritdoc />
         public async Task<bool> EmailExistsAsync(string email)
         {
             return await _context.Users.AnyAsync(u => u.Email == email);
@@ -85,6 +102,15 @@ namespace Spectrum.API.Repositories
         public async Task<User?> GetUserByIdAsync(Guid id)
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+        }
+
+        /// <inheritdoc />
+        public async Task<User?> GetUserWithProfileDataAsync(Guid id)
+        {
+            return await _context.Users
+                .Include(u => u.InterestedGames)
+                .Include(u => u.Platforms)
+                .FirstOrDefaultAsync(u => u.Id == id);
         }
 
         /// <inheritdoc />

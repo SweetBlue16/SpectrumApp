@@ -45,6 +45,13 @@ namespace Spectrum.API.Models
         public string? ProfilePicture { get; set; }
 
         /// <summary>
+        /// Short description or biography for the user can redact his profile.
+        /// </summary>
+        [MaxLength(500)]
+        [Column("biography")]
+        public string? Biography { get; set; }
+
+        /// <summary>
         /// The cryptographically secure hash of the user's password, generated using the BCrypt algorithm. 
         /// Never used to store plain-text or easily reversible credentials.
         /// </summary>
@@ -89,5 +96,18 @@ namespace Spectrum.API.Models
         /// holds an administrative role and has completed their onboarding profile.
         /// </summary>
         public virtual AdminDetail? AdminDetail { get; set; }
+
+        /// <summary>
+        /// Navegation property for the games of the player has marked like interest in his profile.
+        /// Use lot a lot relation through intermedium table.
+        /// </summary>
+        public virtual ICollection<Game> InterestedGames { get; set; } = new List<Game>();
+
+        /// <summary>
+        /// Navigation property for the platforms that the user plays.
+        /// Use lot a lot relation through intermedium table
+        /// </summary>
+        public virtual ICollection<Platform> Platforms { get; set; } = new List<Platform>();
+
     }
 }

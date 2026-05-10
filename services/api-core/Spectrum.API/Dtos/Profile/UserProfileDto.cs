@@ -24,5 +24,21 @@ namespace Spectrum.API.Dtos.Profile
         /// The URL or filename of the user's profile image. This can be null if the user has not set a custom photo.
         /// </summary>
         public string? ProfilePicture { get; set; }
+
+        /// <summary>
+        /// The user's biography or description.
+        /// </summary>
+        [MaxLength(500)]
+        public string? Biography { get; set; }
+
+        /// <summary>
+        /// A list of the user's favorite or interested games.
+        /// </summary>
+        public List<ProfileGameDto> InterestedGames { get; set; } = new List<ProfileGameDto>();
+
+        /// <summary>
+        /// A list of gaming platforms the user plays on.
+        /// </summary>
+        public List<ProfilePlatformDto> Platforms { get; set; } = new List<ProfilePlatformDto>();
     }
 }

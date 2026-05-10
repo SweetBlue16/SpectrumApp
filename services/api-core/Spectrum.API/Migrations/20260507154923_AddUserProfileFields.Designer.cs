@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Spectrum.API.Data;
@@ -11,9 +12,11 @@ using Spectrum.API.Data;
 namespace Spectrum.API.Migrations
 {
     [DbContext(typeof(SpectrumDbContext))]
-    partial class SpectrumDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260507154923_AddUserProfileFields")]
+    partial class AddUserProfileFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -155,33 +158,6 @@ namespace Spectrum.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("platforms");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            Name = "PC"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            Name = "PlayStation"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            Name = "Xbox"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            Name = "Nintendo"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            Name = "Phone"
-                        });
                 });
 
             modelBuilder.Entity("Spectrum.API.Models.Review", b =>

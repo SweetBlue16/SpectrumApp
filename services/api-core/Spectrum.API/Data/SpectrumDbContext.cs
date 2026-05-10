@@ -40,6 +40,11 @@ namespace Spectrum.API.Data
         public DbSet<AdminDetail> AdminDetails { get; set; }
 
         /// <summary>
+        /// Gets or sets the data set for the gaming platforms available.
+        /// </summary>
+        public DbSet<Platform> Platforms { get; set; }
+
+        /// <summary>
         /// Configures the relational database schema, entity relationships, and global query filters
         /// using the Fluent API. These configurations override data annotation attributes.
         /// </summary>
@@ -83,6 +88,14 @@ namespace Spectrum.API.Data
             modelBuilder.Entity<Review>()
                 .Property(review => review.DislikesCount)
                 .HasColumnName("dislikes_count");
+
+            modelBuilder.Entity<Platform>().HasData(
+                new Platform { Id = 1, Name = "PC" },
+                new Platform { Id = 2, Name = "PlayStation" },
+                new Platform { Id = 3, Name = "Xbox" },
+                new Platform { Id = 4, Name = "Nintendo" },
+                new Platform { Id = 5, Name = "Phone" }
+            );
         }
     }
 }

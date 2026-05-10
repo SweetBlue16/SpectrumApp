@@ -50,5 +50,10 @@ namespace Spectrum.API.Models
         [MaxLength(255)]
         [Column("cover_image_url")]
         public string? CoverImageUrl { get; set; }
+
+        /// <summary>
+        /// Navigation property for users that have the game marked like interest. 
+        /// </summary>
+        public virtual ICollection<User> InterestedUsers { get; set; } = new List<User>();
     }
 }
