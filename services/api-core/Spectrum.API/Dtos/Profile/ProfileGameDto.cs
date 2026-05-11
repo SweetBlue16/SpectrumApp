@@ -5,8 +5,10 @@
     /// </summary>
     public class ProfileGameDto
     {
-        public Guid Id { get; set; }
+        public String Id { get; set; } = string.Empty;
 
         public string Name { get; set; } = string.Empty;
+
+        public string? ImageUrl { get; set; }
     }
 }

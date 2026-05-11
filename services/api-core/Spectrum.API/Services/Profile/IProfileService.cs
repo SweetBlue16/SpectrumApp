@@ -70,8 +70,9 @@ namespace Spectrum.API.Services.Profile
                 Biography = user.Biography,
                 InterestedGames = user.InterestedGames.Select(g => new ProfileGameDto
                 {
-                    Id = g.Id,
-                    Name = g.Title
+                    Id = g.Id.ToString(),
+                    Name = g.Title,
+                    ImageUrl = g.CoverImageUrl
                 }).ToList(),
                 Platforms = user.Platforms.Select(p => new ProfilePlatformDto
                 {
@@ -95,9 +96,14 @@ namespace Spectrum.API.Services.Profile
             user.ProfilePicture = profileDto.ProfilePicture;
 
             user.InterestedGames.Clear();
-            var gameIds = profileDto.InterestedGames.Select(g => g.Id).ToList();
+            var validGameGuids = profileDto.InterestedGames
+                .Select(g => g.Id)
+                .Where(id => Guid.TryParse(id, out _)) 
+                .Select(Guid.Parse)
+                .ToList();
+
             var selectedGames = await _context.Games
-                .Where(g => gameIds.Contains(g.Id))
+                .Where(g => validGameGuids.Contains(g.Id))
                 .ToListAsync();
 
             foreach (var game in selectedGames)
