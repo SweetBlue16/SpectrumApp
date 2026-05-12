@@ -1,107 +1,101 @@
 ﻿using Spectrum.API.Dtos.External;
 using Spectrum.API.Exceptions;
+using Spectrum.API.Models;
+using Spectrum.API.Services.Cache;
+using Spectrum.API.Repositories;
 using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Services.External
 {
     /// <summary>
-    /// Defines the contract for interacting with the external video games catalog (e.g., RAWG API).
+    /// Defines the contract for interacting with the video games catalog.
+    /// Now powered by an internal memory cache for high-performance access.
     /// </summary>
     public interface IGameService
     {
         /// <summary>
-        /// Searches for video games based on specified filters and pagination parameters.
+        /// Searches for video games within the local memory cache based on specified filters.
         /// </summary>
-        Task<PagedResult<RawgGameDto>> SearchGamesAsync(GameQueryDto queryDto);
+        /// <param name="queryDto">The data transfer object containing search terms and pagination parameters.</param>
+        /// <returns>A paged result of internal game entities matching the criteria.</returns>
+        Task<PagedResult<Game>> SearchGamesAsync(GameQueryDto queryDto);
 
         /// <summary>
-        /// Retrieves detailed information for a specific video game.
+        /// Retrieves detailed information for a specific video game from the local catalog.
         /// </summary>
-        Task<RawgGameDto> GetGameDetailsAsync(int externalGameId);
+        /// <param name="externalGameId">The unique numeric identifier assigned by RAWG.</param>
+        /// <returns>The detailed metadata profile of the requested game.</returns>
+        Task<Game> GetGameDetailsAsync(int externalGameId);
     }
 
     /// <summary>
-    /// Service implementation for communicating with the RAWG Video Games Database API.
+    /// Service implementation that orchestrates queries against the in-memory game catalog.
+    /// This implementation bypasses external API calls to provide near-instant response times.
     /// </summary>
     public class GameService : IGameService
     {
-        private readonly HttpClient _httpClient;
-        private readonly string _rawgApiKey;
+        private readonly IGameRepository _gameRepo;
+        private readonly IReviewRepository _reviewRepo;
         private readonly ILogger<GameService> _logger;
 
-        private const int DefaultPageSize = 20;
-        private const string GamesEndpoint = "games";
-
-        public GameService(HttpClient httpClient, IConfiguration configuration, ILogger<GameService> logger)
+        public GameService(IGameRepository gameRepo, IReviewRepository reviewRepo, ILogger<GameService> logger)
         {
-            _httpClient = httpClient;
-            _rawgApiKey = configuration["RawgApi:ApiKey"] 
-                ?? throw new ArgumentNullException("RawgApi:ApiKey is not configured.");
+            _gameRepo = gameRepo;
+            _reviewRepo = reviewRepo;
             _logger = logger;
         }
 
         /// <inheritdoc />
-        public async Task<RawgGameDto> GetGameDetailsAsync(int externalGameId)
+        public async Task<Game> GetGameDetailsAsync(int externalGameId)
         {
-            try
-            {
-                var requestUrl = $"{GamesEndpoint}/{externalGameId}?key={_rawgApiKey}";
-                var response = await _httpClient.GetFromJsonAsync<RawgGameDto>(requestUrl);
-                
-                if (response == null)
-                {
-                    throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
-                }
-                return response;
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "Failed to get game details for external game ID: {ExternalGameId}", externalGameId);
+            var game = _gameRepo.GetById(externalGameId);
 
-                if (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-                {
-                    throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
-                }
-                throw new SpectrumBusinessException(Constants.ErrorMessages.ExternalCatalogUnavailable);
+            if (game == null)
+            {
+                _logger.LogWarning("Game with external ID {Id} not found in memory cache.", externalGameId);
+                throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
             }
+
+            var reviews = await _reviewRepo.GetByGameIdAsync(externalGameId);
+
+            if (reviews.Any())
+            {
+                game.InternalRating = reviews.Average(r => r.Rating);
+            }
+
+            return await Task.FromResult(game);
         }
 
         /// <inheritdoc />
-        public async Task<PagedResult<RawgGameDto>> SearchGamesAsync(GameQueryDto queryDto)
+        public async Task<PagedResult<Game>> SearchGamesAsync(GameQueryDto queryDto)
         {
-            try
+            _logger.LogInformation("Searching games locally with query: {SearchTerm}", queryDto.Search);
+
+            var (items, filteredCount) = _gameRepo.Search(queryDto);
+
+            var spectrumRatings = await _reviewRepo.GetAverageRatingsAsync();
+
+            foreach (var game in items)
             {
-                var queryParams = new Dictionary<string, string>
+                if (spectrumRatings.TryGetValue(game.RawgId, out var avgRating))
                 {
-                    ["key"] = _rawgApiKey,
-                    ["search"] = queryDto.Search ?? "",
-                    ["search_precise"] = "true",
-                    ["platforms"] = queryDto.Platforms ?? "",
-                    ["genres"] = queryDto.Genres ?? "",
-                    ["ordering"] = queryDto.Ordering ?? "",
-                    ["page_size"] = queryDto.PageSize?.ToString() ?? DefaultPageSize.ToString(),
-                    ["page"] = queryDto.Page.ToString()
-                };
-
-                var queryString = string.Join("&", queryParams
-                    .Where(p => !string.IsNullOrEmpty(p.Value))
-                    .Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value!)}"));
-
-                var response = await _httpClient.GetFromJsonAsync<RawgResponseDto>($"{GamesEndpoint}?{queryString}");
-
-                return new PagedResult<RawgGameDto>
-                {
-                    Items = response?.Results ?? Enumerable.Empty<RawgGameDto>(),
-                    TotalCount = response != null ? response.Count : 0,
-                    Page = queryDto.Page,
-                    PageSize = queryDto.PageSize ?? DefaultPageSize
-                };
+                    game.InternalRating = avgRating;
+                }
             }
-            catch (HttpRequestException ex)
+
+            var finalItems = items.ToList();
+            if (queryDto.Ordering == "-rating")
             {
-                _logger.LogError(ex, "Failed to search games with RAWG API");
-                throw new SpectrumBusinessException(Constants.ErrorMessages.ExternalCatalogUnavailable);
+                finalItems = finalItems.OrderByDescending(g => g.InternalRating).ToList();
             }
+
+            return new PagedResult<Game>
+            {
+                Items = finalItems,
+                TotalCount = filteredCount,
+                Page = queryDto.Page,
+                PageSize = queryDto.PageSize ?? 20
+            };
         }
     }
 }

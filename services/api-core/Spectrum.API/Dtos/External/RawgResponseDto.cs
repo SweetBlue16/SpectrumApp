@@ -1,4 +1,6 @@
-﻿namespace Spectrum.API.Dtos.External
+﻿using System.Text.Json.Serialization;
+
+namespace Spectrum.API.Dtos.External
 {
     /// <summary>
     /// Data transfer object representing the paginated JSON response envelope 

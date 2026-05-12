@@ -12,6 +12,7 @@ namespace Spectrum.API.Repositories
         Task<Review> AddAsync(Review review, CancellationToken cancellationToken = default);
         Task UpdateCountersAsync(Guid reviewId, int likesCount, int dislikesCount, CancellationToken cancellationToken = default);
         Task SaveChangesAsync(CancellationToken cancellationToken = default);
+        Task<Dictionary<int, double>> GetAverageRatingsAsync(CancellationToken cancellationToken = default);
     }
 
     public class ReviewRepository : IReviewRepository
@@ -75,6 +76,22 @@ namespace Spectrum.API.Repositories
             review.LikesCount = likesCount;
             review.DislikesCount = dislikesCount;
             review.UpdatedAt = DateTime.UtcNow;
+        }
+
+        public async Task<Dictionary<int, double>> GetAverageRatingsAsync(CancellationToken cancellationToken = default)
+        {
+            return await _context.Reviews
+                .GroupBy(r => r.GameId) 
+                .Select(group => new
+                {
+                    GameId = group.Key,
+                    Average = group.Average(r => r.Rating) 
+                })
+                .ToDictionaryAsync(
+                    x => x.GameId,
+                    x => x.Average,
+                    cancellationToken
+                );
         }
 
         public async Task SaveChangesAsync(CancellationToken cancellationToken = default)

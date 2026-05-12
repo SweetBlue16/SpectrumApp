@@ -30,30 +30,18 @@ namespace Spectrum.API.Dtos.External
         public string? BackgroundImage { get; set; } = string.Empty;
 
         /// <summary>
-        /// The average user rating of the game on the external platform (e.g., 4.5).
+        /// List of platform categories (PC, Xbox, PlayStation, etc.).
         /// </summary>
-        public double Rating { get; set; }
+        [JsonPropertyName("parent_platforms")]
+        public List<RawgPlatformWrapperDto>? ParentPlatforms { get; set; }
+
+        [JsonPropertyName("ratings_count")]
+        public int RatingsCount { get; set; }
+
+        /// <summary>
+        /// List of genres associated with the game.
+        /// </summary>
+        public List<RawgGenreDto>? Genres { get; set; }
     }
 
-    /// <summary>
-    /// A wrapper class used to deserialize the nested platform JSON structure from the RAWG API.
-    /// </summary>
-    public class RawgPlatformWrapperDto
-    {
-        /// <summary>
-        /// The underlying platform details.
-        /// </summary>
-        public RawgPlatformDto Platform { get; set; } = new RawgPlatformDto();
-    }
-
-    /// <summary>
-    /// Represents the details of a gaming platform (e.g., PC, PlayStation 5) from the RAWG API.
-    /// </summary>
-    public class RawgPlatformDto
-    {
-        /// <summary>
-        /// The name of the gaming platform.
-        /// </summary>
-        public string Name { get; set; } = string.Empty;
-    }
 }

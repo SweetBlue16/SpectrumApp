@@ -8,10 +8,11 @@ using Spectrum.API.Grpc.Social;
 using Spectrum.API.Middlewares;
 using Spectrum.API.Repositories;
 using Spectrum.API.Services.Auth;
+using Spectrum.API.Services.Cache;
 using Spectrum.API.Services.External;
+using Spectrum.API.Services.Profile;
 using Spectrum.API.Services.Reviews;
 using Spectrum.API.Services.Votes;
-using Spectrum.API.Services.Profile;
 using System.Reflection;
 using System.Text;
 
@@ -53,14 +54,19 @@ builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IReviewCommentService, ReviewCommentService>();
 builder.Services.AddScoped<IVoteService, VoteServiceClient>();
 
-Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
+/*Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
 var rawgBaseUrl = builder.Configuration["RawgApi:BaseUrl"]
     ?? throw new InvalidOperationException("RawgApi:BaseUrl is not configured.");
 builder.Services.AddHttpClient<IGameService, GameService>(client =>
 {
     client.BaseAddress = new Uri(rawgBaseUrl);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
+});*/
+
+Console.WriteLine("[SPECTRUM API] Registering Game Catalog Services (Memory Cache & Sync)...");
+builder.Services.AddSingleton<IGameRepository, GameRepository>();
+builder.Services.AddHttpClient<IRawgSyncService, RawgSyncService>();
+builder.Services.AddScoped<IGameService, GameService>();
 
 Console.WriteLine("[SPECTRUM API] Configuring JWT Authentication...");
 var jwtSecret = builder.Configuration["JwtSettings:Secret"]
@@ -145,6 +151,24 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+
+Console.WriteLine("[SPECTRUM API] Initializing in-memory game catalog...");
+
+var repository = app.Services.GetRequiredService<IGameRepository>();
+var totalGames = repository.GetAll().Count();
+
+if (totalGames > 0)
+{
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine($"[SPECTRUM API] Success: {totalGames} high-quality games loaded into RAM.");
+    Console.ResetColor();
+}
+else
+{
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("[SPECTRUM API] Warning: Snapshot not found or empty. Run sync via AdminGamesController.");
+    Console.ResetColor();
 }
 
 app.UseExceptionHandler();

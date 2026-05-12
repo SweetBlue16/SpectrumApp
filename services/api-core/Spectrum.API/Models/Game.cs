@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Spectrum.API.Models
@@ -16,6 +17,14 @@ namespace Spectrum.API.Models
         [Key]
         [Column("id")]
         public Guid Id { get; set; }
+
+        /// <summary>
+        /// Original numeric identifier provided by the external RAWG API.
+        /// Used for data synchronization and preventing duplicates.
+        /// </summary>
+        [Column("rawg_id")]
+        [NotMapped]
+        public int RawgId { get; set; }
 
         /// <summary>
         /// The official title of the video game.
@@ -49,7 +58,32 @@ namespace Spectrum.API.Models
         /// </summary>
         [MaxLength(255)]
         [Column("cover_image_url")]
+        [JsonPropertyName("background_image")]
         public string? CoverImageUrl { get; set; }
+
+        /// <summary>
+        /// Average rating calculated internally by the Spectrum community.
+        /// This is independent of the external RAWG rating.
+        /// </summary>
+        [Column("internal_rating")]
+        [NotMapped]
+        public double InternalRating { get; set; } = 0.0;
+
+        /// <summary>
+        /// List of genre identifiers associated with the game.
+        /// Used for instant filtering in the frontend sidebar.
+        /// This property is not mapped to the relational database but persisted in the JSON snapshot.
+        /// </summary>
+        [NotMapped]
+        public List<int> GenreIds { get; set; } = new();
+
+        /// <summary>
+        /// List of platform identifiers (e.g., PC, PS5) associated with the game.
+        /// Used for instant filtering in the frontend sidebar.
+        /// This property is not mapped to the relational database but persisted in the JSON snapshot.
+        /// </summary>
+        [NotMapped]
+        public List<int> PlatformIds { get; set; } = new();
 
         /// <summary>
         /// Navigation property for users that have the game marked like interest. 
