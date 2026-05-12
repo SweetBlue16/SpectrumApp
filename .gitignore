@@ -29,3 +29,8 @@ target/
 .idea/
 .DS_Store
 Thumbs.db
+
+# =========================
+# Spectrum App - Data & Cache
+# =========================
+Spectrum.API/Data/games_snapshot.json
