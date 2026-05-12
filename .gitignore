@@ -33,4 +33,4 @@ Thumbs.db
 # =========================
 # Spectrum App - Data & Cache
 # =========================
-Spectrum.API/Data/games_snapshot.json
+SpectrumAPI/services/api-core/Spectrum.API/Data/games_snapshot.json
