@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Spectrum.API.Data;
 using Spectrum.API.Models;
+using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Repositories
 {
@@ -53,6 +54,16 @@ namespace Spectrum.API.Repositories
         /// <param name="user">The user entity to save.</param>
         /// <returns>The saved <see cref="User"/> entity, including any database-generated fields.</returns>
         Task<User> AddUserAsync(User user);
+
+        /// <summary>
+        /// Retrieves a paginated list of users, optionally filtered by a search term that matches the username or email.
+        /// </summary>
+        /// <param name="page">The page number to retrieve.</param>
+        /// <param name="pageSize">The number of items per page.</param>
+        /// <param name="searchTerm">The term to search for in usernames or emails.</param>
+        /// <param name="cancellationToken">A token to cancel the operation.</param>
+        /// <returns>A paged result containing the matching users.</returns>
+        Task<PagedResult<User>> GetPaginatedUsersAsync(int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -117,6 +128,32 @@ namespace Spectrum.API.Repositories
         public async Task<bool> UsernameExistsAsync(string username)
         {
             return await _context.Users.AnyAsync(u => u.Username == username);
+        }
+
+        /// <inheritdoc />
+        public async Task<PagedResult<User>> GetPaginatedUsersAsync(int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default)
+        {
+            var query = _context.Users.AsQueryable();
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var lowerSearch = searchTerm.ToLower();
+                query = query.Where(u => u.Username.ToLower().Contains(lowerSearch) || u.Email.ToLower().Contains(lowerSearch));
+            }
+
+            var totalItems = await query.CountAsync(cancellationToken);
+            var users = await query
+                .OrderByDescending(u => u.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            return new PagedResult<User>
+            {
+                Items = users,
+                TotalCount = totalItems,
+                Page = page,
+                PageSize = pageSize
+            };
         }
     }
 }
