@@ -26,6 +26,8 @@ namespace Spectrum.Tests.UnitTests.Services
             _configMock.Setup(c => c["JwtSettings:Issuer"]).Returns("TestIssuer");
             _configMock.Setup(c => c["JwtSettings:Audience"]).Returns("TestAudience");
 
+            _configMock.Setup(c => c["AdminSettings:MasterKey"]).Returns("SuperSecretMasterKey");
+
             _authService = new AuthService(_userRepositoryMock.Object, _adminRepositoryMock.Object, _configMock.Object);
         }
 
@@ -160,7 +162,6 @@ namespace Spectrum.Tests.UnitTests.Services
         public async Task TestRegisterAdminAsyncWhenValidInputShouldCreateAdminUserAndDetails()
         {
             var masterKey = "SuperSecretMasterKey";
-            _configMock.Setup(c => c["Admin:MasterKey"]).Returns(masterKey);
 
             var adminDto = new RegisterAdminDto
             {
@@ -178,7 +179,7 @@ namespace Spectrum.Tests.UnitTests.Services
             _userRepositoryMock.Setup(r => r.EmailExistsAsync(adminDto.Email)).ReturnsAsync(false);
             _userRepositoryMock.Setup(r => r.UsernameExistsAsync(adminDto.Username)).ReturnsAsync(false);
             _userRepositoryMock.Setup(r => r.AddUserAsync(It.IsAny<User>()))
-                .ReturnsAsync((User u) => 
+                .ReturnsAsync((User u) =>
                 {
                     u.Id = Guid.NewGuid();
                     return u;
@@ -187,7 +188,8 @@ namespace Spectrum.Tests.UnitTests.Services
             var result = await _authService.RegisterAdminAsync(adminDto);
 
             Assert.NotNull(result);
-            Assert.Equal(Constants.Roles.Admin, result.Username == adminDto.Username ? Constants.Roles.Admin : "Failed");
+            Assert.Equal(adminDto.Username, result.Username);
+            Assert.Equal(Constants.Roles.Admin, result.Role);
             Assert.False(string.IsNullOrWhiteSpace(result.Token));
 
             _userRepositoryMock.Verify(r => r.AddUserAsync(It.Is<User>(u => u.Role == Constants.Roles.Admin)), Times.Once);
