@@ -11,6 +11,7 @@ using Spectrum.API.Services.Auth;
 using Spectrum.API.Services.Cache;
 using Spectrum.API.Services.External;
 using Spectrum.API.Services.Profile;
+using Spectrum.API.Services.Reports;
 using Spectrum.API.Services.Reviews;
 using Spectrum.API.Services.Votes;
 using System.Reflection;
@@ -53,6 +54,7 @@ builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IReviewCommentService, ReviewCommentService>();
 builder.Services.AddScoped<IVoteService, VoteServiceClient>();
+builder.Services.AddScoped<IReportService, ReportsService>();
 
 /*Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
 var rawgBaseUrl = builder.Configuration["RawgApi:BaseUrl"]
@@ -153,7 +155,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-Console.WriteLine("[SPECTRUM API] Initializing in-memory game catalog...");
+Console.WriteLine("[SPECTRUM API] Initializing in-memory game catalog...\n");
 
 var repository = app.Services.GetRequiredService<IGameRepository>();
 var totalGames = repository.GetAll().Count();
@@ -161,7 +163,7 @@ var totalGames = repository.GetAll().Count();
 if (totalGames > 0)
 {
     Console.ForegroundColor = ConsoleColor.Green;
-    Console.WriteLine($"[SPECTRUM API] Success: {totalGames} high-quality games loaded into RAM.");
+    Console.WriteLine($"\n[SPECTRUM API] Success: {totalGames} high-quality games loaded into RAM.");
     Console.ResetColor();
 }
 else
