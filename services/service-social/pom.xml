@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.spectrum</groupId>
-    <artifactId>drops</artifactId>
+    <artifactId>social</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>service-drops</name>
-    <description>service-drops</description>
+    <name>service-social</name>
+    <description>service-social</description>
     <url/>
     <licenses>
         <license/>
