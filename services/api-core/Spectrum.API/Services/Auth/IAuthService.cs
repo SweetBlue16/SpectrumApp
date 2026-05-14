@@ -5,6 +5,7 @@ using Spectrum.API.Repositories;
 using Spectrum.API.Utilities;
 using Google.Apis.Auth;
 using static Google.Apis.Auth.GoogleJsonWebSignature;
+using System.Security.Cryptography;
 
 namespace Spectrum.API.Services.Auth
 {
@@ -192,7 +193,7 @@ namespace Spectrum.API.Services.Auth
             {
                 user = new User
                 {
-                    Username = payload.Name.Replace(" ", "_").ToLower() + new Random().Next(100, 999),
+                    Username = payload.Name.Replace(" ", "_").ToLower() + RandomNumberGenerator.GetInt32(1000, 10000),
                     Email = payload.Email,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
                     CreatedAt = DateTime.UtcNow,
