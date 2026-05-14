@@ -44,6 +44,7 @@
             public const string InvalidCredentials = "invalidCredentials";
             public const string AuthProviderError = "authProviderError";
             public const string AccountSuspended = "accountSuspended";
+            public const string AccountAlreadySuspended = "accountAlreadySuspended";
             public const string UsernameAlreadyTaken = "usernameAlreadyTaken";
             public const string InvalidAdminKey = "invalidAdminKey";
             public const string Unauthorized = "unauthorized";

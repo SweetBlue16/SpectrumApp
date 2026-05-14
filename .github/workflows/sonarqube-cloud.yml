@@ -18,7 +18,7 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
       - name: Install SonarQube Cloud scanner
         run: dotnet tool install --global dotnet-sonarscanner
       - name: Build, Test and Analyze
@@ -26,12 +26,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          dotnet sonarscanner begin /k:"ioexception-team_spectrum-api-core" /o:"ioexception-team" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml"
+          dotnet sonarscanner begin /k:"ioexception-team_spectrum-api-core" /o:"ioexception-team" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io" /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" /d:sonar.coverage.exclusions="**/*.cs"
           dotnet build services/api-core/SpectrumCore.sln
           dotnet test services/api-core/SpectrumCore.sln --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./TestResults
           dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
-  analyze-service-drops: 
+  analyze-service-drops:
     name: Analyze Service Drops
     runs-on: ubuntu-latest
     steps:
@@ -41,8 +41,8 @@ jobs:
       - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'zulu'
+          java-version: "21"
+          distribution: "zulu"
       - name: Build, Test and Analyze with Maven
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -54,8 +54,9 @@ jobs:
             -Dsonar.organization=ioexception-team \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.coverage.exclusions=**/*.java \
             -DskipTests
-  
+
   analyze-service-social:
     name: Analyze Service Social
     runs-on: ubuntu-latest
@@ -66,8 +67,8 @@ jobs:
       - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'zulu'
+          java-version: "21"
+          distribution: "zulu"
       - name: Build, Test and Analyze with Maven
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,4 +80,5 @@ jobs:
             -Dsonar.organization=ioexception-team \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
+            -Dsonar.coverage.exclusions=**/*.java \
             -DskipTests
