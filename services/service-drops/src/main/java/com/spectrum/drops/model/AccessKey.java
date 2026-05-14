@@ -1,21 +1,26 @@
 package com.spectrum.drops.model;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
-
-import java.time.Instant;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Document(collection = "access_keys")
 public class AccessKey {
     @Id
     private String id;
-    private String userId;
+    @Indexed
     private String eventId;
-    private String gameTitle;
-    private String accessKeyCode;
-    private Instant claimedAt;
+    @Indexed
+    private String claimedByUserId;
+    private String keyCode;
+    private String status;
+    private long claimedAt;
 }

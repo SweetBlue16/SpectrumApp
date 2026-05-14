@@ -8,6 +8,7 @@ using Spectrum.API.Grpc.Social;
 using Spectrum.API.Middlewares;
 using Spectrum.API.Repositories;
 using Spectrum.API.Services.Auth;
+using Spectrum.API.Services.Drops;
 using Spectrum.API.Services.External;
 using Spectrum.API.Services.Profile;
 using Spectrum.API.Services.Reports;
@@ -55,6 +56,7 @@ builder.Services.AddScoped<IReviewCommentService, ReviewCommentService>();
 builder.Services.AddScoped<IVoteService, VoteServiceClient>();
 builder.Services.AddScoped<IReportService, ReportsService>();
 builder.Services.AddScoped<IUserModerationService, UserModerationService>();
+builder.Services.AddScoped<IDropsService, DropsService>();
 
 /*Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
 var rawgBaseUrl = builder.Configuration["RawgApi:BaseUrl"]
