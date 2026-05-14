@@ -1,4 +1,4 @@
-using MetadataExtractor;
+/*using MetadataExtractor;
 using MetadataExtractor.Formats.QuickTime;
 using MetadataExtractor.Formats.Mp4;
 using Microsoft.AspNetCore.Http;
@@ -91,4 +91,4 @@ namespace Spectrum.API.Utilities
             }
         }
     }
-}
+}*/
