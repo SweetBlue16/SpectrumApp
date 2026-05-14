@@ -61,6 +61,7 @@
             public const string ResourceNotFound = "resourceNotFound";
             public const string DuplicateParticipation = "duplicateParticipation";
             public const string EventKeysExhausted = "eventKeysExhausted";
+            public const string CouldNotClaimKey = "couldNotClaimKey";
             public const string InternalServerError = "internalServerError";
             public const string ExternalCatalogUnavailable = "externalCatalogUnavailable";
             public const string RpcServiceUnavailable = "rpcServiceUnavailable";

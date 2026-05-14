@@ -11,6 +11,8 @@ service DropService {
   rpc ClaimAccessKey (ClaimKeyRequest) returns (ClaimKeyResponse);
   rpc GetEventStatus (GetEventRequest) returns (EventStatusResponse);
   rpc GetWonKeys (WonKeysRequest) returns (WonKeysResponse);
+  rpc CreateEvent (CreateEventRequest) returns (EventActionResponse);
+  rpc UpdateEvent (UpdateEventRequest) returns (EventActionResponse);
 }
 
 message ClaimKeyRequest {
@@ -49,4 +51,25 @@ message WonKey {
   string game_title = 2;
   string access_key_code = 3;
   int64 claimed_at = 4;
+}
+
+message CreateEventRequest {
+  string game_title = 1;
+  string cover_image_url = 2;
+  int64 end_date = 3;
+  repeated string access_keys = 4;
+}
+
+message UpdateEventRequest {
+  string event_id = 1;
+  string game_title = 2;
+  string cover_image_url = 3;
+  int64 end_date = 4;
+  string status = 5;
+}
+
+message EventActionResponse {
+  bool success = 1;
+  string message = 2;
+  string event_id = 3;
 }
