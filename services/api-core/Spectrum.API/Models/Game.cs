@@ -10,10 +10,6 @@ namespace Spectrum.API.Models
     [Table("games")]
     public class Game
     {
-        /// <summary>
-        /// Internal primary key for locally tracked games.
-        /// This identifier is independent from the external RAWG numeric game ID.
-        /// </summary>
         [Key]
         [Column("id")]
         public Guid Id { get; set; }
@@ -58,7 +54,7 @@ namespace Spectrum.API.Models
         /// </summary>
         [MaxLength(255)]
         [Column("cover_image_url")]
-        [JsonPropertyName("background_image")]
+        //[JsonPropertyName("background_image")]
         public string? CoverImageUrl { get; set; }
 
         /// <summary>
