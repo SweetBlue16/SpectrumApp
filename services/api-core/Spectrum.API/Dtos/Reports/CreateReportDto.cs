@@ -4,8 +4,7 @@ namespace Spectrum.API.Dtos.Reports
 {
     public class CreateReportDto
     {
-        [Required]
-        public Guid TargetId { get; set; }
+        public required Guid TargetId { get; set; }
 
         [Required]
         [RegularExpression("^(REVIEW|COMMENT)$", ErrorMessage = "TargetType must be REVIEW or COMMENT.")]
