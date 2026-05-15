@@ -12,6 +12,8 @@ namespace Spectrum.Tests.UnitTests.Middlewares
     {
         private readonly Mock<ILogger<GlobalExceptionHandler>> _loggerMock;
         private readonly GlobalExceptionHandler _handler;
+        
+        private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
         public GlobalExceptionHandlerTests()
         {
@@ -122,7 +124,7 @@ namespace Spectrum.Tests.UnitTests.Middlewares
             Assert.Equal("An unexpected error occurred while processing the request.", problemDetails.Detail);
         }
 
-        private DefaultHttpContext SetupHttpContext()
+        private static DefaultHttpContext SetupHttpContext()
         {
             var context = new DefaultHttpContext();
             context.Request.Path = "/api/test-endpoint";
@@ -130,11 +132,11 @@ namespace Spectrum.Tests.UnitTests.Middlewares
             return context;
         }
 
-        private async Task<ProblemDetails?> GetProblemDetailsFromResponse(DefaultHttpContext context)
+        private static async Task<ProblemDetails?> GetProblemDetailsFromResponse(DefaultHttpContext context)
         {
             context.Response.Body.Seek(0, SeekOrigin.Begin);
             var bodyText = await new StreamReader(context.Response.Body).ReadToEndAsync();
-            return JsonSerializer.Deserialize<ProblemDetails>(bodyText, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return JsonSerializer.Deserialize<ProblemDetails>(bodyText, _jsonOptions);
         }
     }
 }

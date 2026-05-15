@@ -1,6 +1,6 @@
 ﻿namespace Spectrum.API.Utilities
 {
-    public class ProfileUtilities
+    public static class ProfileUtilities
     {
     }
 }

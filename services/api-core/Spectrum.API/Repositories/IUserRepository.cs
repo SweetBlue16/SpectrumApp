@@ -136,8 +136,9 @@ namespace Spectrum.API.Repositories
             var query = _context.Users.AsQueryable();
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var lowerSearch = searchTerm.ToLower();
-                query = query.Where(u => u.Username.ToLower().Contains(lowerSearch) || u.Email.ToLower().Contains(lowerSearch));
+                query = query.Where(u =>
+                    u.Username.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    u.Email.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
             }
 
             var totalItems = await query.CountAsync(cancellationToken);
