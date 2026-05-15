@@ -58,15 +58,6 @@ builder.Services.AddScoped<IReportService, ReportsService>();
 builder.Services.AddScoped<IUserModerationService, UserModerationService>();
 builder.Services.AddScoped<IDropsService, DropsService>();
 
-/*Console.WriteLine("[SPECTRUM API] Configuring external HTTP client for RAWG API...");
-var rawgBaseUrl = builder.Configuration["RawgApi:BaseUrl"]
-    ?? throw new InvalidOperationException("RawgApi:BaseUrl is not configured.");
-builder.Services.AddHttpClient<IGameService, GameService>(client =>
-{
-    client.BaseAddress = new Uri(rawgBaseUrl);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-});*/
-
 Console.WriteLine("[SPECTRUM API] Registering Game Catalog Services (Memory Cache & Sync)...");
 builder.Services.AddSingleton<IGameRepository, GameRepository>();
 builder.Services.AddHttpClient<IRawgSyncService, RawgSyncService>();
@@ -129,22 +120,22 @@ builder.Services.AddSwaggerGen(c =>
 Console.WriteLine("[SPECTRUM API] Configuring gRPC clients for services...");
 builder.Services.AddGrpcClient<DropService.DropServiceClient>(options =>
 {
-    options.Address = new Uri("http://localhost:9090");
+    options.Address = new Uri(builder.Configuration["GrpcSettings:DropsServiceUrl"]!);
 });
 
 builder.Services.AddGrpcClient<VoteService.VoteServiceClient>(options =>
 {
-    options.Address = new Uri("http://localhost:9091");
+    options.Address = new Uri(builder.Configuration["GrpcSettings:SocialServiceUrl"]!);
 });
 
 builder.Services.AddGrpcClient<CommentService.CommentServiceClient>(options =>
 {
-    options.Address = new Uri("http://localhost:9091");
+    options.Address = new Uri(builder.Configuration["GrpcSettings:SocialServiceUrl"]!);
 });
 
 builder.Services.AddGrpcClient<ReportService.ReportServiceClient>(options =>
 {
-    options.Address = new Uri("http://localhost:9091");
+    options.Address = new Uri(builder.Configuration["GrpcSettings:SocialServiceUrl"]!);
 });
 
 Console.WriteLine("[SPECTRUM API] Building the application...");
@@ -177,8 +168,6 @@ else
 
 app.UseExceptionHandler();
 
-// app.UseHttpsRedirection();
-
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
@@ -190,4 +179,4 @@ Console.ForegroundColor = ConsoleColor.Green;
 Console.WriteLine("[SPECTRUM API] Boot sequence complete. Server is now listening to requests!\n");
 Console.ResetColor();
 
-app.Run();
+await app.RunAsync();
