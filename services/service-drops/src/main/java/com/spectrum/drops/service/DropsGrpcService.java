@@ -32,14 +32,9 @@ public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
 
     private static final Logger logger = LoggerFactory.getLogger(DropsGrpcService.class);
 
-    @Autowired
     private final AccessKeyRepository accessKeyRepository;
-
-    @Autowired
     private final EventRepository eventRepository;
-
-    @Autowired
-    private MongoTemplate mongoTemplate;
+    private final MongoTemplate mongoTemplate;
 
     @Override
     public void getEventStatus(GetEventRequest request, StreamObserver<EventStatusResponse> responseObserver) {
