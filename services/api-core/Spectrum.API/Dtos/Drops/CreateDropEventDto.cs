@@ -4,7 +4,7 @@
     {
         public string GameTitle { get; set; } = string.Empty;
         public string CoverImageUrl { get; set; } = string.Empty;
-        public DateTime EndDate { get; set; }
+        public required DateTime EndDate { get; set; }
         public List<string> AccessKeys { get; set; } = new();
     }
 }
