@@ -14,6 +14,7 @@ using Spectrum.API.Services.Profile;
 using Spectrum.API.Services.Reports;
 using Spectrum.API.Services.Reviews;
 using Spectrum.API.Services.Votes;
+using Spectrum.API.Services.Storage;
 using System.Reflection;
 using System.Text;
 
@@ -57,6 +58,8 @@ builder.Services.AddScoped<IVoteService, VoteServiceClient>();
 builder.Services.AddScoped<IReportService, ReportsService>();
 builder.Services.AddScoped<IUserModerationService, UserModerationService>();
 builder.Services.AddScoped<IDropsService, DropsService>();
+builder.Services.AddScoped<IImageStorageService, ImageStorageService>();
+builder.Services.AddScoped<IVideoStorageService, VideoStorageService>();
 
 Console.WriteLine("[SPECTRUM API] Registering Game Catalog Services (Memory Cache & Sync)...");
 builder.Services.AddSingleton<IGameRepository, GameRepository>();

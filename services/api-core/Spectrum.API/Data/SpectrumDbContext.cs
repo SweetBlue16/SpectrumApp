@@ -45,6 +45,11 @@ namespace Spectrum.API.Data
         public DbSet<Platform> Platforms { get; set; }
 
         /// <summary>
+        /// Gets or sets the data set for user-uploaded video clips.
+        /// </summary>
+        public DbSet<GameClip> GameClips { get; set; }
+
+        /// <summary>
         /// Configures the relational database schema, entity relationships, and global query filters
         /// using the Fluent API. These configurations override data annotation attributes.
         /// </summary>
@@ -96,6 +101,41 @@ namespace Spectrum.API.Data
                 new Platform { Id = 4, Name = "Nintendo" },
                 new Platform { Id = 5, Name = "Phone" }
             );
+
+            modelBuilder.Entity<GameClip>()
+                .HasOne(gameClip => gameClip.User)
+                .WithMany()
+                .HasForeignKey(gameClip => gameClip.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GameClip>()
+                .HasOne(gameClip => gameClip.Game)
+                .WithMany()
+                .HasForeignKey(gameClip => gameClip.GameId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.GameId)
+                .HasColumnName("game_id")
+                .IsRequired();
+
+            modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.UserId)
+                .HasColumnName("user_id")
+                .IsRequired();
+
+            modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.CreatedAt)
+                .HasColumnName("created_at");
+
+            modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.Title)
+                .HasColumnName("title")
+                .IsRequired();
+
+            modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.Description)
+                .HasColumnName("description");
         }
     }
 }
