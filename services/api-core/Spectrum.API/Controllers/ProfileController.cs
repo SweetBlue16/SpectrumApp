@@ -108,5 +108,31 @@ namespace Spectrum.API.Controllers
 
             return NoContent();
         }
+
+        /// <summary>
+        /// Updates the authenticated user's profile picture using AWS S3 storage.
+        /// </summary>
+        /// <param name="file">The image file payload (JPG/PNG).</param>
+        /// <returns>An object containing the secure public URL of the uploaded avatar.</returns>
+        /// <response code="200">The profile picture was successfully uploaded and updated.</response>
+        /// <response code="401">The user session token is missing or invalid.</response>
+        /// <response code="400">The image failed payload size or format validations.</response>
+        [HttpPut("avatar")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> UpdateAvatar(IFormFile file)
+        {
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var newAvatarUrl = await profileService.UpdateAvatarAsync(userId, file);
+            return Ok(new { avatarUrl = newAvatarUrl });
+        }
     }
 }

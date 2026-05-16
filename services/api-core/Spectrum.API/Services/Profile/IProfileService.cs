@@ -3,6 +3,7 @@ using Spectrum.API.Data;
 using Spectrum.API.Dtos.Profile;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Repositories;
+using Spectrum.API.Services.Storage;
 
 namespace Spectrum.API.Services.Profile
 {
@@ -31,6 +32,14 @@ namespace Spectrum.API.Services.Profile
         /// <param name="userId">The unique identifier of the user.</param>
         /// <param name="passwordDto">The data containing current and new passwords.</param>
         Task ChangePasswordAsync(Guid userId, ChangePasswordDto passwordDto);
+
+        /// <summary>
+        /// Uploads a new profile picture to AWS S3 and updates the user's avatar URL record.
+        /// </summary>
+        /// <param name="userId">The unique identifier of the authenticated user.</param>
+        /// <param name="file">The image file payload.</param>
+        /// <returns>The public URL of the newly uploaded profile picture.</returns>
+        Task<string> UpdateAvatarAsync(Guid userId, IFormFile file);
     }
 
     /// <summary>
@@ -40,16 +49,19 @@ namespace Spectrum.API.Services.Profile
     {
         private readonly IUserRepository _userRepository;
         private readonly SpectrumDbContext _context;
+        private readonly IImageStorageService _imageStorageService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ProfileService"/> class.
         /// </summary>
         /// <param name="userRepository">The repository used to access user data.</param>
         /// <param name="context">The database context used for relation lookups.</param>
-        public ProfileService(IUserRepository userRepository, SpectrumDbContext context)
+        /// <param name="imageStorageService">The service used for direct image uploads to AWS S3.</param>
+        public ProfileService(IUserRepository userRepository, SpectrumDbContext context, IImageStorageService imageStorageService)
         {
             _userRepository = userRepository;
             _context = context;
+            _imageStorageService = imageStorageService;
         }
 
         /// <inheritdoc />
@@ -145,6 +157,25 @@ namespace Spectrum.API.Services.Profile
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(passwordDto.NewPassword);
 
             await _userRepository.UpdateUserAsync(user);
+        }
+
+        /// <inheritdoc />
+        public async Task<string> UpdateAvatarAsync(Guid userId, IFormFile file)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+            {
+                throw new SpectrumNotFoundException("User not found.");
+            }
+
+            string avatarUrl = await _imageStorageService.UploadImageAsync(file, "photoProfiles");
+
+            user.ProfilePicture = avatarUrl;
+
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+
+            return avatarUrl;
         }
     }
 }

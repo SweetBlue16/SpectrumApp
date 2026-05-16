@@ -61,7 +61,6 @@ namespace Spectrum.API.Services.Storage
                 BucketName = bucketName,
                 Key = key,
                 InputStream = stream,
-                CannedACL = S3CannedACL.PublicRead
             };
 
             await s3Client.PutObjectAsync(request);

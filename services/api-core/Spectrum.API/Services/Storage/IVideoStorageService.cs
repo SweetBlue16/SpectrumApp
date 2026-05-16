@@ -69,7 +69,6 @@ namespace Spectrum.API.Services.Storage
             {
                 BucketName = bucketName,
                 Key = key,
-                CannedACL = S3CannedACL.PublicRead
             };
 
             var response = await s3Client.InitiateMultipartUploadAsync(request);
