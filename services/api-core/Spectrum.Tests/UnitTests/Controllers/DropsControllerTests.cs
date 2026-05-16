@@ -81,7 +81,7 @@ namespace Spectrum.Tests.UnitTests.Controllers
             _dropServiceMock.Verify(s => s.CreateEventAsync(dto, It.IsAny<CancellationToken>()), Times.Once);
         }
 
-        private void SetupControllerUser(ControllerBase controller, Guid userId, string role = "REVIEWER")
+        private static void SetupControllerUser(ControllerBase controller, Guid userId, string role = "REVIEWER")
         {
             var user = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
             {

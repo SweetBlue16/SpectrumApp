@@ -15,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 
 import java.time.Instant;
@@ -29,8 +28,7 @@ public class ReportGrpcService extends ReportServiceGrpc.ReportServiceImplBase {
 
     private static final Logger logger = LoggerFactory.getLogger(ReportGrpcService.class);
 
-    @Autowired
-    private ReportRepository reportRepository;
+    private final ReportRepository reportRepository;
 
     @Override
     public void submitReport(SubmitReportRequest request, StreamObserver<ReportResponse> responseObserver) {

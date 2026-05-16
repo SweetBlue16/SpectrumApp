@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -31,6 +30,7 @@ import java.util.stream.Collectors;
 public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
 
     private static final Logger logger = LoggerFactory.getLogger(DropsGrpcService.class);
+    private static final String STATUS_FIELD = "status";
 
     private final AccessKeyRepository accessKeyRepository;
     private final EventRepository eventRepository;
@@ -75,13 +75,13 @@ public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
                 throw new IllegalStateException("You have already claimed a key for this event.");
             }
 
-            Event event = getValidEventForClaiming(request.getEventId());
+            getValidEventForClaiming(request.getEventId());
 
             Query query = new Query(Criteria.where("eventId").is(request.getEventId())
-                    .and("status").is("AVAILABLE"));
+                    .and(STATUS_FIELD).is("AVAILABLE"));
 
             Update update = new Update()
-                    .set("status", "CLAIMED")
+                    .set(STATUS_FIELD, "CLAIMED")
                     .set("claimedByUserId", request.getUserId())
                     .set("claimedAt", Instant.now().toEpochMilli());
 
@@ -107,16 +107,16 @@ public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
             responseObserver.onCompleted();
         } catch (IllegalArgumentException e) {
             logger.warn("Validation error claiming key: {}", e.getMessage());
-            sendClaimError(responseObserver, e.getMessage());
+            sendClaimError(responseObserver);
         } catch (IllegalStateException e) {
             logger.info("Business rule applied for user {}: {}", request.getUserId(), e.getMessage());
-            sendClaimError(responseObserver, e.getMessage());
+            sendClaimError(responseObserver);
         } catch (DataAccessException e) {
             logger.error("Database error claiming key for user {}", request.getUserId(), e);
-            sendClaimError(responseObserver, "A database error occurred while processing your request.");
+            sendClaimError(responseObserver);
         } catch (Exception e) {
             logger.error("Unexpected error in claimAccessKey", e);
-            sendClaimError(responseObserver, "An internal server error occurred.");
+            sendClaimError(responseObserver);
         }
     }
 
@@ -178,7 +178,7 @@ public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
                 key.setKeyCode(code);
                 key.setStatus("AVAILABLE");
                 return key;
-            }).collect(Collectors.toList());
+            }).toList();
 
             accessKeyRepository.saveAll(keysToInsert);
 
@@ -236,7 +236,7 @@ public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
         }
     }
 
-    private Event getValidEventForClaiming(String eventId) {
+    private void getValidEventForClaiming(String eventId) {
         Optional<Event> eventOpt = eventRepository.findById(eventId);
         if (eventOpt.isEmpty()) {
             throw new IllegalArgumentException("Event not found.");
@@ -249,7 +249,6 @@ public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
         if (Instant.now().toEpochMilli() > event.getEndDate()) {
             throw new IllegalStateException("This event has expired.");
         }
-        return event;
     }
 
     private void decrementEventKeys(String eventId) {
@@ -260,11 +259,11 @@ public class DropsGrpcService extends DropServiceGrpc.DropServiceImplBase {
 
     private void updateEventToDepleted(String eventId) {
         Query query = new Query(Criteria.where("id").is(eventId).and("keysAvailable").lte(0));
-        Update update = new Update().set("status", "DEPLETED");
+        Update update = new Update().set(STATUS_FIELD, "DEPLETED");
         mongoTemplate.updateFirst(query, update, Event.class);
     }
 
-    private void sendClaimError(StreamObserver<ClaimKeyResponse> observer, String message) {
+    private void sendClaimError(StreamObserver<ClaimKeyResponse> observer) {
         observer.onNext(ClaimKeyResponse.newBuilder()
                 .setSuccess(false)
                 .setAccessKeyCode("")

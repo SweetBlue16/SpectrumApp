@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class ReportGrpcServiceTest {
+class ReportGrpcServiceTest {
 
     @Mock
     private ReportRepository reportRepository;
