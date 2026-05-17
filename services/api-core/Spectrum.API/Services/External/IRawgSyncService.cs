@@ -50,6 +50,43 @@ namespace Spectrum.API.Services.External
             var existingGames = await LoadExistingGamesAsync();
             var newGamesCount = 0;
 
+            string? nextUrl = BuildRequestUrl(fullSync);
+
+            while (!string.IsNullOrEmpty(nextUrl))
+            {
+                var response = await _httpClient.GetFromJsonAsync<RawgResponseDto>(nextUrl);
+
+                if (response?.Results != null)
+                {
+                    var validNewGames = response.Results
+                        .Where(item => item.RatingsCount >= 50 && !existingGames.Any(g => g.RawgId == item.Id))
+                        .Select(GameMappingUtilities.MapToInternalModel)
+                        .ToList();
+
+                    existingGames.AddRange(validNewGames);
+                    newGamesCount += validNewGames.Count;
+
+                    _logger.LogInformation("[SPECTRUM API] Quality games processed so far: {Total}", existingGames.Count);
+                    nextUrl = response.Next;
+                }
+                else
+                {
+                    nextUrl = null;
+                }
+
+                await Task.Delay(250);
+                if (!fullSync && newGamesCount > 100) break;
+            }
+
+            await SaveSnapshotAsync(existingGames);
+            _logger.LogInformation("Sync finished. Added {Count} relevant games.", newGamesCount);
+        }
+
+        /// <summary>
+        /// Build base URL to consult RAWG by type of sync.
+        /// </summary>
+        private string BuildRequestUrl(bool fullSync)
+        {
             // API PARAMETERS:
             // exclude_additions=true -> Removes DLCs and soundtracks.
             // metacritic=30,100 -> Filters only games with professional reviews.
@@ -63,36 +100,7 @@ namespace Spectrum.API.Services.External
                 urlParams += $"&dates={startDate},{endDate}";
             }
 
-            string? nextUrl = $"https://api.rawg.io/api/games?{urlParams}";
-
-            while (!string.IsNullOrEmpty(nextUrl))
-            {
-                var response = await _httpClient.GetFromJsonAsync<RawgResponseDto>(nextUrl);
-
-                if (response?.Results != null)
-                {
-                    foreach (var item in response.Results)
-                    {
-                        if (item.RatingsCount >= 100)
-                        {
-                            if (!existingGames.Any(g => g.RawgId == item.Id))
-                            {
-                                existingGames.Add(GameMappingUtilities.MapToInternalModel(item));
-                                newGamesCount++;
-                            }
-                        }
-                    }
-                    _logger.LogInformation("[SPECTRUM API] Quality games processed so far: {Total}", existingGames.Count);
-                    nextUrl = response.Next;
-                }
-                else { nextUrl = null; }
-
-                await Task.Delay(250);
-                if (!fullSync && newGamesCount > 100) break;
-            }
-
-            await SaveSnapshotAsync(existingGames);
-            _logger.LogInformation("Sync finished. Added {Count} relevant games.", newGamesCount);
+            return $"https://api.rawg.io/api/games?{urlParams}";
         }
 
         private async Task<List<Game>> LoadExistingGamesAsync()

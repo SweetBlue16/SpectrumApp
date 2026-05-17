@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Spectrum.API.Data;
 using Spectrum.API.Dtos.Profile;
 using Spectrum.API.Exceptions;
+using Spectrum.API.Models;
 using Spectrum.API.Repositories;
 using Spectrum.API.Services.Storage;
 
@@ -50,6 +51,7 @@ namespace Spectrum.API.Services.Profile
         private readonly IUserRepository _userRepository;
         private readonly SpectrumDbContext _context;
         private readonly IImageStorageService _imageStorageService;
+        private readonly IGameRepository _gameRepository;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ProfileService"/> class.
@@ -57,11 +59,12 @@ namespace Spectrum.API.Services.Profile
         /// <param name="userRepository">The repository used to access user data.</param>
         /// <param name="context">The database context used for relation lookups.</param>
         /// <param name="imageStorageService">The service used for direct image uploads to AWS S3.</param>
-        public ProfileService(IUserRepository userRepository, SpectrumDbContext context, IImageStorageService imageStorageService)
+        public ProfileService(IUserRepository userRepository, SpectrumDbContext context, IImageStorageService imageStorageService, IGameRepository gameRepository)
         {
             _userRepository = userRepository;
             _context = context;
             _imageStorageService = imageStorageService;
+            _gameRepository = gameRepository;
         }
 
         /// <inheritdoc />
@@ -97,7 +100,10 @@ namespace Spectrum.API.Services.Profile
         /// <inheritdoc />
         public async Task UpdateUserProfileAsync(Guid userId, UserProfileDto profileDto)
         {
-            var user = await _userRepository.GetUserWithProfileDataAsync(userId);
+            var user = await _context.Users
+                .Include(u => u.InterestedGames)
+                .Include(u => u.Platforms)
+                .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
             {
@@ -107,34 +113,9 @@ namespace Spectrum.API.Services.Profile
             user.Biography = profileDto.Biography;
             user.ProfilePicture = profileDto.ProfilePicture;
 
-            user.InterestedGames.Clear();
-            var validGameGuids = profileDto.InterestedGames
-                .Select(g => g.Id)
-                .Where(id => Guid.TryParse(id, out _)) 
-                .Select(Guid.Parse)
-                .ToList();
-
-            var selectedGames = await _context.Games
-                .Where(g => validGameGuids.Contains(g.Id))
-                .ToListAsync();
-
-            foreach (var game in selectedGames)
-            {
-                user.InterestedGames.Add(game);
-            }
-
-            user.Platforms.Clear();
-            var platformIds = profileDto.Platforms.Select(p => p.Id).ToList();
-            var selectedPlatforms = await _context.Platforms
-                .Where(p => platformIds.Contains(p.Id))
-                .ToListAsync();
-
-            foreach (var platform in selectedPlatforms)
-            {
-                user.Platforms.Add(platform);
-            }
-
-            await _userRepository.UpdateUserAsync(user);
+            await SyncInterestedGamesAsync(user, profileDto.InterestedGames);
+            await SyncPlatformsAsync(user, profileDto.Platforms);
+            await _context.SaveChangesAsync();
         }
 
         /// <inheritdoc />
@@ -172,10 +153,93 @@ namespace Spectrum.API.Services.Profile
 
             user.ProfilePicture = avatarUrl;
 
-            _context.Users.Update(user);
             await _context.SaveChangesAsync();
 
             return avatarUrl;
         }
+
+        /// <summary>
+        /// Synchronizes the many-to-many relationship between a User and their Interested Games
+        /// by resolving game entities from the in-memory catalog repository and attaching them
+        /// to the EF Core change tracker, avoiding a direct database lookup against the games table.
+        /// </summary>
+        /// <param name="user">The tracked User entity whose interested games will be synchronized.</param>
+        /// <param name="incomingGames">The list of games sent from the client to set as the new interest list.</param>
+        private async Task SyncInterestedGamesAsync(User user, List<ProfileGameDto> incomingGames)
+        {
+            var incomingGameIds = incomingGames
+                .Select(g => g.Id)
+                .Where(id => Guid.TryParse(id, out _))
+                .Select(Guid.Parse)
+                .ToList();
+
+            var gamesToRemove = user.InterestedGames
+                .Where(g => !incomingGameIds.Contains(g.Id))
+                .ToList();
+
+            foreach (var game in gamesToRemove)
+                user.InterestedGames.Remove(game);
+
+            var existingGameIds = user.InterestedGames.Select(g => g.Id).ToHashSet();
+            var gamesToAddIds = incomingGameIds.Where(id => !existingGameIds.Contains(id)).ToList();
+
+            foreach (var gameId in gamesToAddIds)
+            {
+                var gameFromCatalog = _gameRepository.GetByGuid(gameId);
+                if (gameFromCatalog is null) continue;
+
+                var trackedGame = _context.ChangeTracker.Entries<Game>()
+                    .FirstOrDefault(e => e.Entity.Id == gameId)?.Entity;
+
+                if (trackedGame is null)
+                {
+                    var existsInDb = await _context.Games.AnyAsync(g => g.Id == gameId);
+                    if (!existsInDb)
+                    {
+                        await _context.Games.AddAsync(gameFromCatalog);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    _context.Attach(gameFromCatalog);
+                }
+
+                var gameToAdd = trackedGame ?? gameFromCatalog;
+                user.InterestedGames.Add(gameToAdd);
+            }
+        }
+
+        /// <summary>
+        /// Synchronizes the many-to-many relationship between a User and their Platforms
+        /// by calculating the exact additions and removals to preserve Change Tracker state.
+        /// </summary>
+        private async Task SyncPlatformsAsync(User user, List<ProfilePlatformDto> incomingPlatforms)
+        {
+            var incomingPlatformIds = incomingPlatforms.Select(p => p.Id).ToList();
+
+            var platformsToRemove = user.Platforms
+                .Where(p => !incomingPlatformIds.Contains(p.Id))
+                .ToList();
+
+            foreach (var platform in platformsToRemove)
+            {
+                user.Platforms.Remove(platform);
+            }
+
+            var existingPlatformIds = user.Platforms.Select(p => p.Id).ToList();
+            var platformsToAddIds = incomingPlatformIds.Except(existingPlatformIds).ToList();
+
+            if (platformsToAddIds.Any())
+            {
+                var platformsToAdd = await _context.Platforms
+                    .Where(p => platformsToAddIds.Contains(p.Id))
+                    .ToListAsync();
+
+                foreach (var platform in platformsToAdd)
+                {
+                    user.Platforms.Add(platform);
+                }
+            }
+        }
+
     }
 }

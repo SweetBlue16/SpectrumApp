@@ -17,7 +17,7 @@
         {
             return new Game
             {
-                Id = Guid.NewGuid(),
+                Id = GenerateDeterministicGuid(externalGame.Id),
                 RawgId = externalGame.Id,
                 Title = externalGame.Name,
                 ReleaseDate = string.IsNullOrEmpty(externalGame.Released)
@@ -28,6 +28,24 @@
                 GenreIds = externalGame.Genres?.Select(g => g.Id).ToList() ?? new List<int>(),
                 PlatformIds = externalGame.ParentPlatforms?.Select(p => p.Platform.Id).ToList() ?? new List<int>()
             };
+        }
+
+        /// <summary>
+        /// Generates a stable, deterministic GUID derived from a RAWG game ID using a SHA-256 hash
+        /// seeded with a fixed namespace. This ensures the same game always maps to the same GUID
+        /// across sync cycles, preserving referential integrity in related tables.
+        /// </summary>
+        /// <param name="rawgId">The unique numeric identifier from the RAWG API.</param>
+        /// <returns>A stable <see cref="Guid"/> that is consistent across application restarts and re-syncs.</returns>
+        private static Guid GenerateDeterministicGuid(int rawgId)
+        {
+            var namespaceBytes = "spectrum-games-namespace"u8.ToArray();
+            var idBytes = BitConverter.GetBytes(rawgId);
+            var input = namespaceBytes.Concat(idBytes).ToArray();
+
+            var hash = System.Security.Cryptography.SHA256.HashData(input);
+            var guidBytes = hash[..16];
+            return new Guid(guidBytes);
         }
     }
 }

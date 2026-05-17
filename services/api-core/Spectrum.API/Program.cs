@@ -18,6 +18,8 @@ using Spectrum.API.Services.Storage;
 using System.Reflection;
 using System.Text;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 Console.ForegroundColor = ConsoleColor.Cyan;
 Console.WriteLine("\n[SPECTRUM API] Starting server configuration...");
 Console.ResetColor();

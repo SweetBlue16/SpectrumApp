@@ -29,6 +29,13 @@ namespace Spectrum.API.Repositories
         /// <param name="id">The unique RAWG ID of the game.</param>
         /// <returns>The corresponding Game object if found; otherwise, null.</returns>
         Game? GetById(int id);
+
+        /// <summary>
+        /// Retrieves a specific game using its relational database unique identifier.
+        /// </summary>
+        /// <param name="id">The GUID primary key of the game.</param>
+        /// <returns>The corresponding Game object if found; otherwise, null.</returns>
+        Game? GetByGuid(Guid id);
     }
 
     /// <summary>
@@ -107,5 +114,6 @@ namespace Spectrum.API.Repositories
         }
 
         public Game? GetById(int id) => _games.FirstOrDefault(g => g.RawgId == id);
+        public Game? GetByGuid(Guid id) => _games.FirstOrDefault(g => g.Id == id);
     }
 }

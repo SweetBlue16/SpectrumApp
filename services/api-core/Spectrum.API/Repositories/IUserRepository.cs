@@ -112,7 +112,7 @@ namespace Spectrum.API.Repositories
         /// <inheritdoc />
         public async Task<User?> GetUserByIdAsync(Guid id)
         {
-            return await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            return await _context.Users.FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
         }
 
         /// <inheritdoc />
@@ -121,7 +121,7 @@ namespace Spectrum.API.Repositories
             return await _context.Users
                 .Include(u => u.InterestedGames)
                 .Include(u => u.Platforms)
-                .FirstOrDefaultAsync(u => u.Id == id);
+                .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
         }
 
         /// <inheritdoc />
