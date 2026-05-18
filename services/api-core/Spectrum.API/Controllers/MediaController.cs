@@ -3,7 +3,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Dtos.Media;
 using Spectrum.API.Services.Storage;
+using Spectrum.API.Services.Clips;
 using System.Threading.Tasks;
+using System.Security.Claims;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace Spectrum.API.Controllers
 {
@@ -19,16 +22,19 @@ namespace Spectrum.API.Controllers
     {
         private readonly IImageStorageService imageStorageService;
         private readonly IVideoStorageService videoStorageService;
+        private readonly IGameClipService gameClipService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MediaController"/> class.
         /// </summary>
         /// <param name="imageStorageService">The service handling single-part image uploads.</param>
         /// <param name="videoStorageService">The service handling chunked video uploads.</param>
-        public MediaController(IImageStorageService imageStorageService, IVideoStorageService videoStorageService)
+        /// <param name="gameClipService">The service handling clip business logic and PostgreSQL persistence.</param>
+        public MediaController(IImageStorageService imageStorageService, IVideoStorageService videoStorageService, IGameClipService gameClipService)
         {
             this.imageStorageService = imageStorageService;
             this.videoStorageService = videoStorageService;
+            this.gameClipService = gameClipService;
         }
 
         /// <summary>
@@ -88,18 +94,73 @@ namespace Spectrum.API.Controllers
             return Ok(new { eTag });
         }
 
-        /// <summary>
-        /// Finalizes the multipart upload by ordering the storage provider to assemble all chunks.
+/// <summary>
+        /// Finalizes the multipart upload by ordering the storage provider to assemble all chunks and persists metadata.
         /// </summary>
         /// <param name="request">The complete assembly payload containing the part mapping and session IDs.</param>
         /// <returns>The final public access URL for the assembled video file.</returns>
-        /// <response code="200">All chunks were successfully merged into a single file.</response>
+        /// <response code="200">All chunks were successfully merged into a single file and recorded in the database.</response>
+        /// <response code="401">The user is not authenticated or the token is invalid.</response>
         [HttpPost("clips/complete")]
         [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> CompleteVideoUpload([FromBody] CompleteUploadRequestDto request)
         {
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            {
+                return Unauthorized();
+            }
+
             var url = await videoStorageService.CompleteVideoUploadAsync(request);
+            await gameClipService.CreateClipAsync(userId, request, url);
+
             return Ok(new { url });
+        }
+
+        /// <summary>
+        /// Retrieves a summary list of all game clips uploaded by a specific user.
+        /// </summary>
+        /// <param name="userId">The unique identifier of the target user.</param>
+        /// <returns>A collection of game clip summary objects matching the profile view constraints.</returns>
+        /// <response code="200">The collection was successfully retrieved (can be empty).</response>
+        [HttpGet("/api/clips/user/{userId}")] 
+        [ProducesResponseType(typeof(IEnumerable<GameClipSummaryDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetUserClips(Guid userId)
+        {
+            var clips = await gameClipService.GetClipsByUserIdAsync(userId);
+            return Ok(clips);
+        }
+
+        /// <summary>
+        /// Deletes a specific game clip from the system database and removes its source file from AWS S3 storage.
+        /// </summary>
+        /// <param name="clipId">The unique identifier of the clip to be removed.</param>
+        /// <returns>A 204 No Content response if the deletion is authorized and successful.</returns>
+        /// <response code="204">The clip was successfully deleted from both storage and database layers.</response>
+        /// <response code="401">The user is not authenticated or the token is invalid.</response>
+        /// <response code="403">The requesting user is neither the owner of the clip nor an administrative user.</response>
+        /// <response code="404">The specified game clip identifier does not exist in the system.</response>
+        [HttpDelete("clips/{clipId}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DeleteClip(Guid clipId)
+        {
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            {
+                return Unauthorized();
+            }
+
+            await gameClipService.DeleteClipAsync(clipId, userId);
+
+            return NoContent();
         }
     }
 }

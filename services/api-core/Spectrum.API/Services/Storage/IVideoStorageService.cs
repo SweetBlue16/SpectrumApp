@@ -32,6 +32,13 @@ namespace Spectrum.API.Services.Storage
         /// Merges all uploaded chunks into the final video file.
         /// </summary>
         Task<string> CompleteVideoUploadAsync(CompleteUploadRequestDto request);
+
+        /// <summary>
+        /// Deletes a specific video file from the AWS S3 bucket using its public URL.
+        /// </summary>
+        /// <param name="videoUrl">The full public URL of the video to be deleted.</param>
+        /// <returns>A task that represents the asynchronous delete operation.</returns>
+        Task DeleteVideoAsync(string videoUrl);
     }
 
     /// <summary>
@@ -121,6 +128,28 @@ namespace Spectrum.API.Services.Storage
             await s3Client.CompleteMultipartUploadAsync(awsRequest);
 
             return $"https://{bucketName}.s3.{region}.amazonaws.com/{request.KeyName}";
+        }
+
+        /// <inheritdoc />
+        public async Task DeleteVideoAsync(string videoUrl)
+        {
+            try
+            {
+                var uri = new Uri(videoUrl);
+                string keyName = uri.AbsolutePath.TrimStart('/');
+
+                var request = new DeleteObjectRequest
+                {
+                    BucketName = bucketName,
+                    Key = keyName
+                };
+
+                await s3Client.DeleteObjectAsync(request);
+            }
+            catch (Exception ex)
+            {
+                throw new SpectrumServiceUnavailableException($"Failed to delete video from AWS S3: {ex.Message}");
+            }
         }
     }
 }
