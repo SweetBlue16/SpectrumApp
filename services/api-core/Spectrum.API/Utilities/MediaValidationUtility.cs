@@ -55,9 +55,10 @@ namespace Spectrum.API.Utilities
         {
             double durationInSeconds = GetVideoDuration(file);
 
-            if (durationInSeconds > maxDurationSeconds || durationInSeconds <= 0)
+            if (durationInSeconds > 0 && durationInSeconds > maxDurationSeconds)
             {
-                throw new SpectrumFileValidationException($"The video must have a valid duration and cannot exceed {maxDurationSeconds} seconds.");
+                throw new SpectrumFileValidationException(
+                    $"The video cannot exceed {maxDurationSeconds} seconds.");
             }
         }
 
@@ -70,7 +71,8 @@ namespace Spectrum.API.Utilities
 
             if (movieHeader != null &&
                 movieHeader.TryGetInt64(QuickTimeMovieHeaderDirectory.TagDuration, out long rawDuration) &&
-                movieHeader.TryGetInt64(QuickTimeMovieHeaderDirectory.TagTimeScale, out long timeScale))
+                movieHeader.TryGetInt64(QuickTimeMovieHeaderDirectory.TagTimeScale, out long timeScale) &&
+                timeScale > 0)
             {
                 return (double)rawDuration / timeScale;
             }

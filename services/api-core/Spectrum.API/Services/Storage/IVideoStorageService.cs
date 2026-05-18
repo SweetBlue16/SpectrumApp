@@ -60,7 +60,7 @@ namespace Spectrum.API.Services.Storage
         /// <inheritdoc />
         public async Task<MultipartInitResponseDto> StartVideoUploadAsync(IFormFile file, string folder)
         {
-            MediaValidationUtility.ValidateVideo(file, maxSizeMb: 60, maxDurationSeconds: 15);
+            MediaValidationUtility.ValidateVideo(file, maxSizeMb: 61, maxDurationSeconds: 16);
 
             string uniqueName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
             string key = $"{folder}/{uniqueName}";

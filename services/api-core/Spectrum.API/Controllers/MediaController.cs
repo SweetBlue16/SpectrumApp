@@ -58,7 +58,7 @@ namespace Spectrum.API.Controllers
         [HttpPost("clips/start")]
         [ProducesResponseType(typeof(MultipartInitResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> StartVideoUpload(IFormFile file)
+        public async Task<IActionResult> StartVideoUpload([FromForm] IFormFile file)
         {
             // We pass the file to validate duration and size before talking to AWS S3
             var response = await videoStorageService.StartVideoUploadAsync(file, "clips");
@@ -79,7 +79,7 @@ namespace Spectrum.API.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> UploadVideoChunk(
-            IFormFile file,
+            [FromForm]IFormFile file,
             [FromQuery] string uploadId,
             [FromQuery] int partNumber,
             [FromQuery] string keyName)

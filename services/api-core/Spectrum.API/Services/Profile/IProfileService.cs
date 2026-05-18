@@ -79,6 +79,7 @@ namespace Spectrum.API.Services.Profile
 
             return new UserProfileDto
             {
+                Id = user.Id,
                 Username = user.Username,
                 Email = user.Email,
                 ProfilePicture = user.ProfilePicture,

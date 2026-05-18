@@ -7,6 +7,8 @@ namespace Spectrum.API.Dtos.Profile
     /// </summary>
     public class UserProfileDto
     {
+
+        public Guid Id { get; set; }
         /// <summary>
         /// The authenticated user's public display name.
         /// </summary>

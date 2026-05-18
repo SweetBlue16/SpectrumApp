@@ -50,7 +50,7 @@ namespace Spectrum.API.Services.Storage
         /// <inheritdoc />
         public async Task<string> UploadImageAsync(IFormFile file, string folder)
         {
-            MediaValidationUtility.ValidateImage(file, maxSizeMb: 5);
+            MediaValidationUtility.ValidateImage(file, maxSizeMb: 6);
 
             string uniqueName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
             string key = $"{folder}/{uniqueName}";
