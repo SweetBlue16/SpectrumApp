@@ -64,7 +64,7 @@ namespace Spectrum.API.Controllers
         [HttpPost("clips/start")]
         [ProducesResponseType(typeof(MultipartInitResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> StartVideoUpload([FromForm] IFormFile file)
+        public async Task<IActionResult> StartVideoUpload(IFormFile file)
         {
             // We pass the file to validate duration and size before talking to AWS S3
             var response = await videoStorageService.StartVideoUploadAsync(file, "clips");
@@ -85,7 +85,7 @@ namespace Spectrum.API.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> UploadVideoChunk(
-            [FromForm]IFormFile file,
+            IFormFile file,
             [FromQuery] string uploadId,
             [FromQuery] int partNumber,
             [FromQuery] string keyName)
@@ -94,7 +94,7 @@ namespace Spectrum.API.Controllers
             return Ok(new { eTag });
         }
 
-/// <summary>
+        /// <summary>
         /// Finalizes the multipart upload by ordering the storage provider to assemble all chunks and persists metadata.
         /// </summary>
         /// <param name="request">The complete assembly payload containing the part mapping and session IDs.</param>

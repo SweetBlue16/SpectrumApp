@@ -64,6 +64,8 @@ namespace Spectrum.API.Repositories
         /// <param name="cancellationToken">A token to cancel the operation.</param>
         /// <returns>A paged result containing the matching users.</returns>
         Task<PagedResult<User>> GetPaginatedUsersAsync(int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default);
+        Task<int> GetTotalReviewsCountAsync(Guid userId, CancellationToken cancellationToken = default);
+        Task<int> GetTotalClipsCountAsync(Guid userId, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -155,6 +157,18 @@ namespace Spectrum.API.Repositories
                 Page = page,
                 PageSize = pageSize
             };
+        }
+
+        public async Task<int> GetTotalReviewsCountAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.Reviews
+                .CountAsync(r => r.UserId == userId, cancellationToken);
+        }
+
+        public async Task<int> GetTotalClipsCountAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await _context.GameClips
+                .CountAsync(c => c.UserId == userId, cancellationToken);
         }
     }
 }

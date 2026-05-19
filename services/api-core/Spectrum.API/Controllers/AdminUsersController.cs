@@ -48,5 +48,19 @@ namespace Spectrum.API.Controllers
 
             return Ok(result);
         }
+
+        [HttpGet("{id:guid}")]
+        public async Task<IActionResult> GetUserDetail(Guid id, CancellationToken cancellationToken)
+        {
+            var userDetail = await _moderationService.GetUserDetailAsync(id, cancellationToken);
+            return Ok(userDetail);
+        }
+
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> DeleteUser(Guid id, CancellationToken cancellationToken)
+        {
+            await _moderationService.DeleteUserAsync(id, cancellationToken);
+            return NoContent();
+        }
     }
 }
