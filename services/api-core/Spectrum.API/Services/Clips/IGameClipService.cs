@@ -26,6 +26,7 @@ namespace Spectrum.API.Services.Clips
         public string Url { get; set; } = string.Empty; 
         public int LikesCount { get; set; } 
         public int DislikesCount { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 
     /// <summary>
@@ -119,7 +120,8 @@ namespace Spectrum.API.Services.Clips
                 GameName = c.Game?.Title,
                 Url = c.Url, 
                 LikesCount = 0, 
-                DislikesCount = 0
+                DislikesCount = 0,
+                CreatedAt = c.CreatedAt
             });
         }
 
