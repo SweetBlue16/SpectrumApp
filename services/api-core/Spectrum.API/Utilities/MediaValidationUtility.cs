@@ -19,6 +19,7 @@ namespace Spectrum.API.Utilities
         public static void ValidateImage(IFormFile file, int maxSizeMb)
         {
             ValidateFileSize(file, maxSizeMb, "image");
+            ValidateContentType(file, new[] { "image/jpeg", "image/png" }, "image");
             ValidateFileExtension(file, new[] { ".jpg", ".jpeg", ".png" }, "image");
         }
 
@@ -28,8 +29,28 @@ namespace Spectrum.API.Utilities
         public static void ValidateVideo(IFormFile file, int maxSizeMb, int maxDurationSeconds)
         {
             ValidateFileSize(file, maxSizeMb, "video");
+            ValidateContentType(file, new[] { "video/mp4", "video/quicktime" }, "video");
             ValidateFileExtension(file, new[] { ".mp4", ".mov" }, "video");
             ValidateVideoDuration(file, maxDurationSeconds);
+        }
+
+        public static void ValidateReviewAttachment(IFormFile file)
+        {
+            if (file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                ValidateImage(file, maxSizeMb: 5);
+                return;
+            }
+
+            if (file.ContentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+            {
+                ValidateFileSize(file, 20, "video");
+                ValidateContentType(file, new[] { "video/mp4", "video/quicktime" }, "video");
+                ValidateFileExtension(file, new[] { ".mp4", ".mov" }, "video");
+                return;
+            }
+
+            throw new SpectrumFileValidationException("Invalid attachment format. Only JPG, PNG, MP4 and MOV are allowed.");
         }
 
         private static void ValidateFileSize(IFormFile file, int maxSizeMb, string type)
@@ -48,6 +69,14 @@ namespace Spectrum.API.Utilities
             {
                 string joinedExtensions = string.Join(" and ", allowedExtensions.Select(e => e.Replace(".", "").ToUpper()));
                 throw new SpectrumFileValidationException($"Invalid {type} format. Only {joinedExtensions} are allowed.");
+            }
+        }
+
+        private static void ValidateContentType(IFormFile file, string[] allowedContentTypes, string type)
+        {
+            if (!allowedContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new SpectrumFileValidationException($"Invalid {type} content type.");
             }
         }
 

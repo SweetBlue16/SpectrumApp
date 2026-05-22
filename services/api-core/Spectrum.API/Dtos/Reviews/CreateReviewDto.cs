@@ -5,19 +5,27 @@ namespace Spectrum.API.Dtos.Reviews
     public class CreateReviewDto
     {
         [Required]
-        [Range(1, int.MaxValue, ErrorMessage = "El ID del videojuego debe ser válido.")]
+        [Range(1, int.MaxValue, ErrorMessage = "El ID del videojuego debe ser valido.")]
         public int GameId { get; set; }
 
         [Required]
-        [Range(1, 5, ErrorMessage = "La calificación debe estar entre 1 y 5.")]
+        [Range(5, 10, ErrorMessage = "La calificacion debe estar entre 5 y 10.")]
         public int Rating { get; set; }
 
         [Required]
-        [MinLength(1, ErrorMessage = "El contenido de la reseña es obligatorio.")]
-        [MaxLength(2000, ErrorMessage = "El contenido de la reseña no puede superar los 2000 caracteres.")]
+        [MinLength(1, ErrorMessage = "El titulo de la resena es obligatorio.")]
+        [MaxLength(120, ErrorMessage = "El titulo de la resena no puede superar los 120 caracteres.")]
+        public string Title { get; set; } = string.Empty;
+
+        [Required]
+        [MinLength(1, ErrorMessage = "El contenido de la resena es obligatorio.")]
+        [MaxLength(2000, ErrorMessage = "El contenido de la resena no puede superar los 2000 caracteres.")]
         public string Content { get; set; } = string.Empty;
 
-        [MaxLength(255, ErrorMessage = "La URL de la imagen no puede superar los 255 caracteres.")]
+        [MaxLength(255, ErrorMessage = "La URL del adjunto no puede superar los 255 caracteres.")]
         public string? ImageUrl { get; set; }
+
+        [MaxLength(50, ErrorMessage = "El tipo de archivo no puede superar los 50 caracteres.")]
+        public string? MediaType { get; set; }
     }
 }

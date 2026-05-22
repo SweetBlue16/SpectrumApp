@@ -12,6 +12,12 @@ namespace Spectrum.API.Dtos.Reviews
 
         public DateTime PublishedAt { get; set; }
 
+        public string Username { get; set; } = string.Empty;
+
+        public string UserProfilePicture { get; set; } = string.Empty;
+
         public bool IsOwnComment { get; set; }
+
+        public bool CanDelete { get; set; }
     }
 }

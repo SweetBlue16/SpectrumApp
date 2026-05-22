@@ -1,5 +1,6 @@
 ﻿using Spectrum.API.Dtos.External;
 using Spectrum.API.Exceptions;
+using Spectrum.API.Dtos.Reviews;
 using Spectrum.API.Models;
 using Spectrum.API.Services.Cache;
 using Spectrum.API.Repositories;
@@ -26,6 +27,13 @@ namespace Spectrum.API.Services.External
         /// <param name="externalGameId">The unique numeric identifier assigned by RAWG.</param>
         /// <returns>The detailed metadata profile of the requested game.</returns>
         Task<Game> GetGameDetailsAsync(int externalGameId);
+
+        Task<GameReviewDetailDto> GetGameReviewDetailAsync(
+            int externalGameId,
+            Guid? currentUserId = null,
+            bool isAdmin = false,
+            CancellationToken cancellationToken = default
+        );
     }
 
     /// <summary>
@@ -64,6 +72,55 @@ namespace Spectrum.API.Services.External
             }
 
             return await Task.FromResult(game);
+        }
+
+        /// <inheritdoc />
+        public async Task<GameReviewDetailDto> GetGameReviewDetailAsync(
+            int externalGameId,
+            Guid? currentUserId = null,
+            bool isAdmin = false,
+            CancellationToken cancellationToken = default
+        )
+        {
+            var game = await GetGameDetailsAsync(externalGameId);
+            var reviews = await _reviewRepo.GetByGameIdAsync(externalGameId, cancellationToken);
+            var reviewDtos = reviews.Select(review =>
+            {
+                var profilePicture = review.User?.ProfilePicture ?? string.Empty;
+                var isOwnReview = currentUserId.HasValue && review.UserId == currentUserId.Value;
+
+                return new ReviewResponseDto
+                {
+                    Id = review.Id,
+                    UserId = review.UserId,
+                    Username = review.User?.Username ?? string.Empty,
+                    UserProfileImageUrl = profilePicture,
+                    ProfilePicture = profilePicture,
+                    GameId = review.GameId,
+                    GameTitle = game.Title,
+                    GameCoverUrl = game.CoverImageUrl ?? string.Empty,
+                    Rating = review.Rating,
+                    Title = review.Title,
+                    Content = review.Content,
+                    ImageUrl = review.ImageUrl ?? string.Empty,
+                    AttachmentUrl = review.ImageUrl ?? string.Empty,
+                    AttachmentType = review.MediaType ?? string.Empty,
+                    CreatedAt = review.CreatedAt,
+                    UpdatedAt = review.UpdatedAt,
+                    LikesCount = review.LikesCount,
+                    DislikesCount = review.DislikesCount,
+                    IsOwnReview = isOwnReview,
+                    CanDelete = isOwnReview || isAdmin
+                };
+            }).ToList();
+
+            return new GameReviewDetailDto
+            {
+                Game = game,
+                Reviews = reviewDtos,
+                AverageRating = reviewDtos.Count > 0 ? reviewDtos.Average(review => review.Rating) : null,
+                ReviewsCount = reviewDtos.Count
+            };
         }
 
         /// <inheritdoc />

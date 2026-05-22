@@ -1,0 +1,7 @@
+spring:
+  mongodb:
+    uri: mongodb://localhost:27017/spectrum_social_test
+
+grpc:
+  server:
+    port: 0

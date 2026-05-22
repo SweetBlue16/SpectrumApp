@@ -20,8 +20,9 @@ namespace Spectrum.API.Services.Storage
         /// </summary>
         /// <param name="file">The image file (JPG/PNG).</param>
         /// <param name="folder">The target folder name (e.g., "photoProfiles").</param>
+        /// <param name="maxSizeMb">Maximum allowed size in megabytes.</param>
         /// <returns>The public URL of the uploaded image.</returns>
-        Task<string> UploadImageAsync(IFormFile file, string folder);
+        Task<string> UploadImageAsync(IFormFile file, string folder, int maxSizeMb = 6);
     }
 
     /// <summary>
@@ -36,21 +37,21 @@ namespace Spectrum.API.Services.Storage
         public ImageStorageService(IConfiguration config)
         {
             var credentials = new Amazon.Runtime.BasicAWSCredentials(
-                config["AWS:AccessKey"],
-                config["AWS:SecretKey"]
+                config["AWS:AccessKey"] ?? throw new InvalidOperationException("AWS:AccessKey is not configured."),
+                config["AWS:SecretKey"] ?? throw new InvalidOperationException("AWS:SecretKey is not configured.")
             );
 
-            region = config["AWS:Region"];
+            region = config["AWS:Region"] ?? throw new InvalidOperationException("AWS:Region is not configured.");
             var regionEndpoint = Amazon.RegionEndpoint.GetBySystemName(region);
 
             s3Client = new AmazonS3Client(credentials, regionEndpoint);
-            bucketName = config["AWS:BucketName"];
+            bucketName = config["AWS:BucketName"] ?? throw new InvalidOperationException("AWS:BucketName is not configured.");
         }
 
         /// <inheritdoc />
-        public async Task<string> UploadImageAsync(IFormFile file, string folder)
+        public async Task<string> UploadImageAsync(IFormFile file, string folder, int maxSizeMb = 6)
         {
-            MediaValidationUtility.ValidateImage(file, maxSizeMb: 6);
+            MediaValidationUtility.ValidateImage(file, maxSizeMb);
 
             string uniqueName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
             string key = $"{folder}/{uniqueName}";

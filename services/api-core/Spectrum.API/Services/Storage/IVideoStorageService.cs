@@ -34,6 +34,11 @@ namespace Spectrum.API.Services.Storage
         Task<string> CompleteVideoUploadAsync(CompleteUploadRequestDto request);
 
         /// <summary>
+        /// Validates and uploads a review video as a single S3 object.
+        /// </summary>
+        Task<string> UploadReviewVideoAsync(IFormFile file, string folder);
+
+        /// <summary>
         /// Deletes a specific video file from the AWS S3 bucket using its public URL.
         /// </summary>
         /// <param name="videoUrl">The full public URL of the video to be deleted.</param>
@@ -53,15 +58,15 @@ namespace Spectrum.API.Services.Storage
         public VideoStorageService(IConfiguration config)
         {
             var credentials = new Amazon.Runtime.BasicAWSCredentials(
-                config["AWS:AccessKey"],
-                config["AWS:SecretKey"]
+                config["AWS:AccessKey"] ?? throw new InvalidOperationException("AWS:AccessKey is not configured."),
+                config["AWS:SecretKey"] ?? throw new InvalidOperationException("AWS:SecretKey is not configured.")
             );
 
-            region = config["AWS:Region"];
+            region = config["AWS:Region"] ?? throw new InvalidOperationException("AWS:Region is not configured.");
             var regionEndpoint = Amazon.RegionEndpoint.GetBySystemName(region);
 
             s3Client = new AmazonS3Client(credentials, regionEndpoint);
-            bucketName = config["AWS:BucketName"];
+            bucketName = config["AWS:BucketName"] ?? throw new InvalidOperationException("AWS:BucketName is not configured.");
         }
 
         /// <inheritdoc />
@@ -128,6 +133,27 @@ namespace Spectrum.API.Services.Storage
             await s3Client.CompleteMultipartUploadAsync(awsRequest);
 
             return $"https://{bucketName}.s3.{region}.amazonaws.com/{request.KeyName}";
+        }
+
+        /// <inheritdoc />
+        public async Task<string> UploadReviewVideoAsync(IFormFile file, string folder)
+        {
+            MediaValidationUtility.ValidateReviewAttachment(file);
+
+            string uniqueName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            string key = $"{folder}/{uniqueName}";
+
+            using var stream = file.OpenReadStream();
+            var request = new PutObjectRequest
+            {
+                BucketName = bucketName,
+                Key = key,
+                InputStream = stream,
+            };
+
+            await s3Client.PutObjectAsync(request);
+
+            return $"https://{bucketName}.s3.{region}.amazonaws.com/{key}";
         }
 
         /// <inheritdoc />

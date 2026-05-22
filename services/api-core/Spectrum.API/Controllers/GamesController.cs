@@ -4,6 +4,7 @@ using Spectrum.API.Dtos.External;
 using Spectrum.API.Models;
 using Spectrum.API.Services.External;
 using Spectrum.API.Utilities;
+using System.Security.Claims;
 
 namespace Spectrum.API.Controllers
 {
@@ -64,6 +65,36 @@ namespace Spectrum.API.Controllers
         {
             var gameDetails = await _gameService.GetGameDetailsAsync(id);
             return Ok(gameDetails);
+        }
+
+        [HttpGet("{id}/reviews-detail")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetReviewDetail(int id, CancellationToken cancellationToken)
+        {
+            var detail = await _gameService.GetGameReviewDetailAsync(
+                id,
+                GetCurrentUserIdOrDefault(),
+                User.IsInRole(Constants.Roles.Admin),
+                cancellationToken
+            );
+
+            return Ok(detail);
+        }
+
+        private Guid? GetCurrentUserIdOrDefault()
+        {
+            if (User.Identity?.IsAuthenticated != true)
+            {
+                return null;
+            }
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                              User.FindFirst("sub")?.Value ??
+                              User.FindFirst("userId")?.Value;
+
+            return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
     }
 }

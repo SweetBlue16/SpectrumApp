@@ -5,6 +5,7 @@ using Spectrum.API.Dtos.Votes;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Services.Reviews;
 using Spectrum.API.Services.Votes;
+using Spectrum.API.Utilities;
 using System.Security.Claims;
 
 namespace Spectrum.API.Controllers
@@ -65,8 +66,9 @@ namespace Spectrum.API.Controllers
         public async Task<IActionResult> Delete(Guid reviewId, CancellationToken cancellationToken)
         {
             var userId = GetCurrentUserId();
+            var isAdmin = IsCurrentUserAdmin();
 
-            await _reviewService.DeleteAsync(reviewId, userId, cancellationToken);
+            await _reviewService.DeleteAsync(reviewId, userId, isAdmin, cancellationToken);
 
             return NoContent();
         }
@@ -95,6 +97,7 @@ namespace Spectrum.API.Controllers
             var reviews = await _reviewService.GetByGameIdAsync(
                 gameId,
                 GetCurrentUserIdOrDefault(),
+                IsCurrentUserAdmin(),
                 cancellationToken
             );
 
@@ -163,11 +166,31 @@ namespace Spectrum.API.Controllers
             var comments = await _reviewCommentService.GetByReviewAsync(
                 reviewId,
                 GetCurrentUserIdOrDefault(),
+                IsCurrentUserAdmin(),
                 page,
                 cancellationToken
             );
 
             return Ok(comments);
+        }
+
+        [HttpDelete("comments/{commentId}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteComment(
+            string commentId,
+            CancellationToken cancellationToken
+        )
+        {
+            var userId = GetCurrentUserId();
+
+            await _reviewCommentService.DeleteAsync(
+                commentId,
+                userId,
+                IsCurrentUserAdmin(),
+                cancellationToken
+            );
+
+            return NoContent();
         }
 
         private Guid GetCurrentUserId()
@@ -204,6 +227,12 @@ namespace Spectrum.API.Controllers
             return User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
                    User.FindFirst("sub")?.Value ??
                    User.FindFirst("userId")?.Value;
+        }
+
+        private bool IsCurrentUserAdmin()
+        {
+            return User.Identity?.IsAuthenticated == true &&
+                   User.IsInRole(Constants.Roles.Admin);
         }
     }
 }

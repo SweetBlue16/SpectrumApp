@@ -26,6 +26,10 @@ namespace Spectrum.API.Dtos.Reviews
 
         public string ImageUrl { get; set; } = string.Empty;
 
+        public string AttachmentUrl { get; set; } = string.Empty;
+
+        public string AttachmentType { get; set; } = string.Empty;
+
         public DateTime CreatedAt { get; set; }
 
         public DateTime? UpdatedAt { get; set; }
@@ -35,5 +39,7 @@ namespace Spectrum.API.Dtos.Reviews
         public int DislikesCount { get; set; }
 
         public bool IsOwnReview { get; set; }
+
+        public bool CanDelete { get; set; }
     }
 }

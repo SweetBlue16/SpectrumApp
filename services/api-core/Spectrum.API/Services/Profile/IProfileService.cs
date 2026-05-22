@@ -59,6 +59,7 @@ namespace Spectrum.API.Services.Profile
         /// <param name="userRepository">The repository used to access user data.</param>
         /// <param name="context">The database context used for relation lookups.</param>
         /// <param name="imageStorageService">The service used for direct image uploads to AWS S3.</param>
+        /// <param name="gameRepository">The in-memory game catalog used to resolve interested games.</param>
         public ProfileService(IUserRepository userRepository, SpectrumDbContext context, IImageStorageService imageStorageService, IGameRepository gameRepository)
         {
             _userRepository = userRepository;

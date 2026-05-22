@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Spectrum.API.Data;
+using Spectrum.API.Dtos.Profile;
 using Spectrum.API.Models;
 using Spectrum.API.Utilities;
 
@@ -37,6 +38,11 @@ namespace Spectrum.API.Repositories
         /// <param name="id">The unique identifier (GUID) of the user.</param>
         /// <returns>The matching <see cref="User"/> entity, or null if no user is found.</returns>
         Task<User?> GetUserByIdAsync(Guid id);
+
+        Task<IReadOnlyDictionary<Guid, PublicUserSummaryDto>> GetPublicUsersByIdsAsync(
+            IEnumerable<Guid> userIds,
+            CancellationToken cancellationToken = default
+        );
 
         /// <summary>
         /// Retrieves a user record including its related interested games and platforms.
@@ -115,6 +121,33 @@ namespace Spectrum.API.Repositories
         public async Task<User?> GetUserByIdAsync(Guid id)
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
+        }
+
+        public async Task<IReadOnlyDictionary<Guid, PublicUserSummaryDto>> GetPublicUsersByIdsAsync(
+            IEnumerable<Guid> userIds,
+            CancellationToken cancellationToken = default
+        )
+        {
+            var distinctUserIds = userIds
+                .Where(userId => userId != Guid.Empty)
+                .Distinct()
+                .ToArray();
+
+            if (distinctUserIds.Length == 0)
+            {
+                return new Dictionary<Guid, PublicUserSummaryDto>();
+            }
+
+            return await _context.Users
+                .AsNoTracking()
+                .Where(user => distinctUserIds.Contains(user.Id))
+                .Select(user => new PublicUserSummaryDto
+                {
+                    Id = user.Id,
+                    Username = user.Username,
+                    ProfilePicture = user.ProfilePicture ?? string.Empty
+                })
+                .ToDictionaryAsync(user => user.Id, cancellationToken);
         }
 
         /// <inheritdoc />

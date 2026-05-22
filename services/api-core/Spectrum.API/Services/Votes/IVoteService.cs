@@ -51,6 +51,11 @@ namespace Spectrum.API.Services.Votes
                 throw new SpectrumNotFoundException(ReviewNotFoundMessage);
             }
 
+            if (review.UserId == userId)
+            {
+                throw new SpectrumForbiddenException("No puedes votar tu propia resena.");
+            }
+
             try
             {
                 var response = await _voteServiceClient.CastVoteAsync(
@@ -94,12 +99,15 @@ namespace Spectrum.API.Services.Votes
                     ex.StatusCode
                 );
 
-                if (ex.StatusCode == StatusCode.InvalidArgument)
+                throw ex.StatusCode switch
                 {
-                    throw new SpectrumBusinessException(ex.Status.Detail, ex);
-                }
-
-                throw new SpectrumServiceUnavailableException(Constants.ErrorMessages.RpcServiceUnavailable, ex);
+                    StatusCode.InvalidArgument => new SpectrumBusinessException(ex.Status.Detail, ex),
+                    StatusCode.Unavailable => new SpectrumServiceUnavailableException(
+                        "El servicio social no esta disponible. Verifica que service-social este corriendo en el puerto gRPC configurado.",
+                        ex
+                    ),
+                    _ => new SpectrumServiceUnavailableException(Constants.ErrorMessages.RpcServiceUnavailable, ex)
+                };
             }
         }
     }

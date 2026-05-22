@@ -22,6 +22,7 @@ namespace Spectrum.API.Services.Reviews
         Task<IReadOnlyList<ReviewResponseDto>> GetByGameIdAsync(
             int gameId,
             Guid? currentUserId = null,
+            bool isAdmin = false,
             CancellationToken cancellationToken = default
         );
 
@@ -41,6 +42,7 @@ namespace Spectrum.API.Services.Reviews
         Task DeleteAsync(
             Guid reviewId,
             Guid userId,
+            bool isAdmin = false,
             CancellationToken cancellationToken = default
         );
     }
@@ -51,10 +53,16 @@ namespace Spectrum.API.Services.Reviews
         private const string ForbiddenActionMessage = "No tienes permisos para realizar esta accion.";
 
         private const int MinimumGameId = 1;
-        private const int MinimumRating = 1;
-        private const int MaximumRating = 5;
+        private const int MinimumRating = 5;
+        private const int MaximumRating = 10;
+        private const int MaximumTitleLength = 120;
         private const int MaximumContentLength = 2000;
         private const int MaximumImageUrlLength = 255;
+        private static readonly HashSet<string> AllowedMediaTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "image",
+            "video"
+        };
 
         private readonly IReviewRepository _reviewRepository;
 
@@ -71,8 +79,10 @@ namespace Spectrum.API.Services.Reviews
         {
             ValidateGameId(dto.GameId);
             ValidateRating(dto.Rating);
+            var title = NormalizeTitle(dto.Title);
             var content = NormalizeContent(dto.Content);
             ValidateImageUrl(dto.ImageUrl);
+            ValidateMediaType(dto.ImageUrl, dto.MediaType);
 
             var review = new Review
             {
@@ -80,8 +90,10 @@ namespace Spectrum.API.Services.Reviews
                 UserId = userId,
                 GameId = dto.GameId,
                 Rating = dto.Rating,
+                Title = title,
                 Content = content,
                 ImageUrl = dto.ImageUrl,
+                MediaType = NormalizeMediaType(dto.MediaType),
                 LikesCount = 0,
                 DislikesCount = 0,
                 CreatedAt = DateTime.UtcNow,
@@ -91,7 +103,9 @@ namespace Spectrum.API.Services.Reviews
             var createdReview = await _reviewRepository.AddAsync(review, cancellationToken);
             await _reviewRepository.SaveChangesAsync(cancellationToken);
 
-            return MapToResponseDto(createdReview, userId);
+            var persistedReview = await _reviewRepository.GetByIdAsync(createdReview.Id, cancellationToken);
+
+            return MapToResponseDto(persistedReview ?? createdReview, userId);
         }
 
         public async Task<ReviewResponseDto> GetByIdAsync(
@@ -113,6 +127,7 @@ namespace Spectrum.API.Services.Reviews
         public async Task<IReadOnlyList<ReviewResponseDto>> GetByGameIdAsync(
             int gameId,
             Guid? currentUserId = null,
+            bool isAdmin = false,
             CancellationToken cancellationToken = default
         )
         {
@@ -121,7 +136,7 @@ namespace Spectrum.API.Services.Reviews
             var reviews = await _reviewRepository.GetByGameIdAsync(gameId, cancellationToken);
 
             return reviews
-                .Select(review => MapToResponseDto(review, currentUserId))
+                .Select(review => MapToResponseDto(review, currentUserId, isAdmin))
                 .ToList();
         }
 
@@ -154,6 +169,11 @@ namespace Spectrum.API.Services.Reviews
                 review.Rating = dto.Rating.Value;
             }
 
+            if (dto.Title is not null)
+            {
+                review.Title = NormalizeTitle(dto.Title);
+            }
+
             if (dto.Content is not null)
             {
                 review.Content = NormalizeContent(dto.Content);
@@ -165,6 +185,12 @@ namespace Spectrum.API.Services.Reviews
                 review.ImageUrl = dto.ImageUrl;
             }
 
+            if (dto.MediaType is not null)
+            {
+                ValidateMediaType(review.ImageUrl, dto.MediaType);
+                review.MediaType = NormalizeMediaType(dto.MediaType);
+            }
+
             review.UpdatedAt = DateTime.UtcNow;
 
             await _reviewRepository.SaveChangesAsync(cancellationToken);
@@ -173,11 +199,12 @@ namespace Spectrum.API.Services.Reviews
         public async Task DeleteAsync(
             Guid reviewId,
             Guid userId,
+            bool isAdmin = false,
             CancellationToken cancellationToken = default
         )
         {
             var review = await GetExistingReviewAsync(reviewId, cancellationToken);
-            EnsureReviewOwner(review, userId);
+            EnsureReviewOwnerOrAdmin(review, userId, isAdmin);
 
             review.IsDeleted = true;
             review.UpdatedAt = DateTime.UtcNow;
@@ -205,29 +232,42 @@ namespace Spectrum.API.Services.Reviews
             }
         }
 
-        private static ReviewResponseDto MapToResponseDto(Review review, Guid? currentUserId)
+        private static void EnsureReviewOwnerOrAdmin(Review review, Guid userId, bool isAdmin)
+        {
+            if (!isAdmin && review.UserId != userId)
+            {
+                throw new SpectrumForbiddenException(ForbiddenActionMessage);
+            }
+        }
+
+        private static ReviewResponseDto MapToResponseDto(Review review, Guid? currentUserId, bool isAdmin = false)
         {
             var profilePicture = review.User?.ProfilePicture ?? string.Empty;
+            var isOwnReview = currentUserId.HasValue && review.UserId == currentUserId.Value;
+            var username = review.User?.Username ?? "Usuario Spectrum";
 
             return new ReviewResponseDto
             {
                 Id = review.Id,
                 UserId = review.UserId,
-                Username = review.User?.Username ?? string.Empty,
+                Username = username,
                 UserProfileImageUrl = profilePicture,
                 ProfilePicture = profilePicture,
                 GameId = review.GameId,
                 GameTitle = string.Empty,
                 GameCoverUrl = string.Empty,
                 Rating = review.Rating,
-                Title = string.Empty,
+                Title = review.Title,
                 Content = review.Content,
                 ImageUrl = review.ImageUrl ?? string.Empty,
+                AttachmentUrl = review.ImageUrl ?? string.Empty,
+                AttachmentType = review.MediaType ?? string.Empty,
                 CreatedAt = review.CreatedAt,
                 UpdatedAt = review.UpdatedAt,
                 LikesCount = review.LikesCount,
                 DislikesCount = review.DislikesCount,
-                IsOwnReview = currentUserId.HasValue && review.UserId == currentUserId.Value
+                IsOwnReview = isOwnReview,
+                CanDelete = isOwnReview || isAdmin
             };
         }
 
@@ -243,8 +283,25 @@ namespace Spectrum.API.Services.Reviews
         {
             if (rating is < MinimumRating or > MaximumRating)
             {
-                throw new SpectrumBusinessException("La calificacion debe estar entre 1 y 5.");
+                throw new SpectrumBusinessException("La calificacion debe estar entre 5 y 10.");
             }
+        }
+
+        private static string NormalizeTitle(string? title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                throw new SpectrumBusinessException("El titulo de la resena es obligatorio.");
+            }
+
+            var normalizedTitle = title.Trim();
+
+            if (normalizedTitle.Length > MaximumTitleLength)
+            {
+                throw new SpectrumBusinessException("El titulo de la resena no puede superar los 120 caracteres.");
+            }
+
+            return normalizedTitle;
         }
 
         private static string NormalizeContent(string? content)
@@ -268,8 +325,31 @@ namespace Spectrum.API.Services.Reviews
         {
             if (imageUrl is not null && imageUrl.Length > MaximumImageUrlLength)
             {
-                throw new SpectrumBusinessException("La URL de la imagen no puede superar los 255 caracteres.");
+                throw new SpectrumBusinessException("La URL del adjunto no puede superar los 255 caracteres.");
             }
+        }
+
+        private static void ValidateMediaType(string? imageUrl, string? mediaType)
+        {
+            if (string.IsNullOrWhiteSpace(imageUrl) && string.IsNullOrWhiteSpace(mediaType))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(imageUrl) || string.IsNullOrWhiteSpace(mediaType))
+            {
+                throw new SpectrumBusinessException("El adjunto debe incluir URL y tipo de archivo.");
+            }
+
+            if (!AllowedMediaTypes.Contains(mediaType))
+            {
+                throw new SpectrumBusinessException("El tipo de archivo adjunto no es valido.");
+            }
+        }
+
+        private static string? NormalizeMediaType(string? mediaType)
+        {
+            return string.IsNullOrWhiteSpace(mediaType) ? null : mediaType.Trim().ToLowerInvariant();
         }
     }
 }

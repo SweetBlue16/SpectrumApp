@@ -54,6 +54,21 @@ namespace Spectrum.API.Controllers
             return Ok(new { url });
         }
 
+        [HttpPost("reviews/attachment")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> UploadReviewAttachment(IFormFile file)
+        {
+            if (file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            {
+                var imageUrl = await imageStorageService.UploadImageAsync(file, "review-attachments", maxSizeMb: 5);
+                return Ok(new { url = imageUrl, mediaType = "image" });
+            }
+
+            var videoUrl = await videoStorageService.UploadReviewVideoAsync(file, "review-attachments");
+            return Ok(new { url = videoUrl, mediaType = "video" });
+        }
+
         /// <summary>
         /// Validates a video file and initiates an AWS S3 multipart upload session.
         /// </summary>

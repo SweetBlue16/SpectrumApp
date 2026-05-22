@@ -6,7 +6,7 @@ namespace Spectrum.API.Dtos.Reviews
     {
         [Required]
         [MinLength(1, ErrorMessage = "El comentario es obligatorio.")]
-        [MaxLength(1000, ErrorMessage = "El comentario no puede superar los 1000 caracteres.")]
+        [MaxLength(500, ErrorMessage = "El comentario no puede superar los 500 caracteres.")]
         public string Content { get; set; } = string.Empty;
     }
 }

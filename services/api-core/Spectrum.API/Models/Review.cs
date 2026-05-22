@@ -33,12 +33,21 @@ namespace Spectrum.API.Models
         public int GameId { get; set; }
 
         /// <summary>
-        /// User rating from 1 to 5.
+        /// User rating from 5 to 10.
         /// </summary>
         [Required]
-        [Range(1, 5)]
+        [Range(5, 10)]
         [Column("rating")]
         public int Rating { get; set; }
+
+        /// <summary>
+        /// Short public title for the review.
+        /// </summary>
+        [Required]
+        [MinLength(1)]
+        [MaxLength(120)]
+        [Column("title")]
+        public string Title { get; set; } = string.Empty;
 
         /// <summary>
         /// Textual content of the review.
@@ -55,6 +64,13 @@ namespace Spectrum.API.Models
         [MaxLength(255)]
         [Column("image_url")]
         public string? ImageUrl { get; set; }
+
+        /// <summary>
+        /// Optional media MIME type for the review attachment.
+        /// </summary>
+        [MaxLength(50)]
+        [Column("media_type")]
+        public string? MediaType { get; set; }
 
         /// <summary>
         /// Cached likes count returned from the social/voting subsystem when applicable.
