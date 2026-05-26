@@ -1,34 +1,12 @@
-using Microsoft.EntityFrameworkCore;
-using Spectrum.API.Data;
 using Spectrum.API.Dtos.Media;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Models;
-using Spectrum.API.Repositories; 
+using Spectrum.API.Repositories;
 using Spectrum.API.Services.Storage;
 using Spectrum.API.Utilities;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Spectrum.API.Services.Clips
 {
-    /// <summary>
-    /// Represents a summary of a game clip optimized for profile views.
-    /// Maps perfectly with the frontend ClipData constraints.
-    /// </summary>
-    public class GameClipSummaryDto
-    {
-        public Guid Id { get; set; }
-        public string Title { get; set; } = string.Empty;
-        public string? ThumbnailUrl { get; set; }
-        public string? GameName { get; set; }
-        public string Url { get; set; } = string.Empty; 
-        public int LikesCount { get; set; } 
-        public int DislikesCount { get; set; }
-        public DateTime CreatedAt { get; set; }
-    }
-
     /// <summary>
     /// Defines the contract for managing game clips.
     /// Handles the business logic for creating, retrieving, and deleting clips in the database.
@@ -38,11 +16,14 @@ namespace Spectrum.API.Services.Clips
         /// <summary>
         /// Creates a new game clip record in the database after a successful upload to AWS S3.
         /// </summary>
+        /// <param name="request">The request payload containing metadata about the video upload.</param>
+        /// <param name="videoUrl">The public cloud URL where the raw video file is stored.</param>
         Task CreateClipAsync(Guid userId, CompleteUploadRequestDto request, string videoUrl);
 
         /// <summary>
         /// Retrieves all game clips belonging to a specific user.
         /// </summary>
+        /// <returns>A collection of <see cref="GameClipSummaryDto"/> optimized for view representations.</returns>
         Task<IEnumerable<GameClipSummaryDto>> GetClipsByUserIdAsync(Guid userId);
 
         /// <summary>
@@ -53,40 +34,50 @@ namespace Spectrum.API.Services.Clips
 
     /// <summary>
     /// Implementation of <see cref="IGameClipService"/> for managing game clips.
+    /// Operates completely decoupled from the infrastructure layer through repositories.
     /// </summary>
     public class GameClipService : IGameClipService
     {
-        private readonly SpectrumDbContext dbContext;
-        private readonly IVideoStorageService videoStorageService;
-        private readonly IGameRepository gameRepository; 
+        private readonly IGameClipRepository _clipRepository;
+        private readonly IUserRepository _userRepository;
+        private readonly IVideoStorageService _videoStorageService;
+        private readonly IGameRepository _gameRepository;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GameClipService"/> class.
         /// </summary>
-        public GameClipService(SpectrumDbContext dbContext, IVideoStorageService videoStorageService, IGameRepository gameRepository)
+        /// <param name="clipRepository">The repository abstracted for data access operations related to game clips.</param>
+        /// <param name="userRepository">The repository abstracted for user records and authorization lookups.</param>
+        /// <param name="videoStorageService">The core service handling file lifecycles in cloud object storage.</param>
+        /// <param name="gameRepository">The central memory repository acting as the snapshot catalog cache.</param>
+        public GameClipService(
+            IGameClipRepository clipRepository,
+            IUserRepository userRepository,
+            IVideoStorageService videoStorageService,
+            IGameRepository gameRepository)
         {
-            this.dbContext = dbContext;
-            this.videoStorageService = videoStorageService;
-            this.gameRepository = gameRepository;
+            _clipRepository = clipRepository;
+            _userRepository = userRepository;
+            _videoStorageService = videoStorageService;
+            _gameRepository = gameRepository;
         }
 
         /// <inheritdoc />
         public async Task CreateClipAsync(Guid userId, CompleteUploadRequestDto request, string videoUrl)
         {
-            var gameExists = await dbContext.Games.AnyAsync(g => g.Id == request.GameId);
-            
+            var gameExists = await _clipRepository.GameExistsAsync(request.GameId);
+
             if (!gameExists)
             {
-                // Si no existe, lo rescatamos del catálogo en memoria usando su Guid
-                var gameFromCatalog = gameRepository.GetByGuid(request.GameId);
-                
+                var gameFromCatalog = _gameRepository.GetByGuid(request.GameId);
+
                 if (gameFromCatalog == null)
                 {
                     throw new SpectrumNotFoundException("The specified game was not found in the catalog cache.");
                 }
 
-                await dbContext.Games.AddAsync(gameFromCatalog);
-                await dbContext.SaveChangesAsync();
+                await _clipRepository.AddGameAsync(gameFromCatalog);
+                await _clipRepository.SaveChangesAsync();
             }
 
             var newClip = new GameClip
@@ -99,27 +90,23 @@ namespace Spectrum.API.Services.Clips
                 CreatedAt = DateTime.UtcNow
             };
 
-            dbContext.GameClips.Add(newClip);
-            await dbContext.SaveChangesAsync();
+            await _clipRepository.AddClipAsync(newClip);
+            await _clipRepository.SaveChangesAsync();
         }
 
         /// <inheritdoc />
         public async Task<IEnumerable<GameClipSummaryDto>> GetClipsByUserIdAsync(Guid userId)
         {
-            var clips = await dbContext.GameClips
-                .Include(c => c.Game)
-                .Where(c => c.UserId == userId)
-                .OrderByDescending(c => c.CreatedAt)
-                .ToListAsync();
+            var clips = await _clipRepository.GetClipsByUserIdAsync(userId);
 
             return clips.Select(c => new GameClipSummaryDto
             {
                 Id = c.Id,
                 Title = c.Title,
-                ThumbnailUrl = null, 
+                ThumbnailUrl = null,
                 GameName = c.Game?.Title,
-                Url = c.Url, 
-                LikesCount = 0, 
+                Url = c.Url,
+                LikesCount = 0,
                 DislikesCount = 0,
                 CreatedAt = c.CreatedAt
             });
@@ -128,8 +115,8 @@ namespace Spectrum.API.Services.Clips
         /// <inheritdoc />
         public async Task DeleteClipAsync(Guid clipId, Guid userId)
         {
-            var clip = await dbContext.GameClips.FirstOrDefaultAsync(c => c.Id == clipId);
-            
+            var clip = await _clipRepository.GetClipByIdAsync(clipId);
+
             if (clip == null)
             {
                 throw new SpectrumNotFoundException("The requested clip was not found.");
@@ -137,12 +124,15 @@ namespace Spectrum.API.Services.Clips
 
             await ValidateDeletionPermissionAsync(clip, userId);
 
-            await videoStorageService.DeleteVideoAsync(clip.Url);
+            await _videoStorageService.DeleteVideoAsync(clip.Url);
 
-            dbContext.GameClips.Remove(clip);
-            await dbContext.SaveChangesAsync();
+            await _clipRepository.DeleteClipAsync(clip);
+            await _clipRepository.SaveChangesAsync();
         }
 
+        /// <summary>
+        /// Evaluates identity and security constraints to determine if a removal operation can take place.
+        /// </summary>
         private async Task ValidateDeletionPermissionAsync(GameClip clip, Guid userId)
         {
             if (clip.UserId == userId)
@@ -150,8 +140,8 @@ namespace Spectrum.API.Services.Clips
                 return;
             }
 
-            var requestingUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
-            
+            var requestingUser = await _userRepository.GetUserByIdAsync(userId);
+
             if (requestingUser?.Role != Constants.Roles.Admin)
             {
                 throw new SpectrumForbiddenException("You do not have permission to delete this clip.");

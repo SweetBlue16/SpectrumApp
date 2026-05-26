@@ -14,28 +14,24 @@ namespace Spectrum.API.Repositories
         /// <summary>
         /// Checks if an email address is already present in the database.
         /// </summary>
-        /// <param name="email">The email address to validate.</param>
         /// <returns>True if the email exists, false otherwise.</returns>
         Task<bool> EmailExistsAsync(string email);
 
         /// <summary>
         /// Checks if a username is already present in the database.
         /// </summary>
-        /// <param name="username">The username to validate.</param>
         /// <returns>True if the username exists, false otherwise.</returns>
         Task<bool> UsernameExistsAsync(string username);
 
         /// <summary>
         /// Retrieves a user record by their registered email address.
         /// </summary>
-        /// <param name="email">The email address to search for.</param>
         /// <returns>The matching <see cref="User"/> entity, or null if no user is found.</returns>
         Task<User?> GetUserByEmailAsync(string email);
 
         /// <summary>
         /// Retrieves a user record by their unique system identifier.
         /// </summary>
-        /// <param name="id">The unique identifier (GUID) of the user.</param>
         /// <returns>The matching <see cref="User"/> entity, or null if no user is found.</returns>
         Task<User?> GetUserByIdAsync(Guid id);
 
@@ -57,7 +53,6 @@ namespace Spectrum.API.Repositories
         /// <summary>
         /// Persists a newly created user record to the database.
         /// </summary>
-        /// <param name="user">The user entity to save.</param>
         /// <returns>The saved <see cref="User"/> entity, including any database-generated fields.</returns>
         Task<User> AddUserAsync(User user);
 
@@ -70,8 +65,33 @@ namespace Spectrum.API.Repositories
         /// <param name="cancellationToken">A token to cancel the operation.</param>
         /// <returns>A paged result containing the matching users.</returns>
         Task<PagedResult<User>> GetPaginatedUsersAsync(int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Retrieves the total number of reviews published by a specific user.
+        /// </summary>
+        /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
+        /// <returns>The total count of reviews.</returns>
         Task<int> GetTotalReviewsCountAsync(Guid userId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Retrieves the total number of game clips uploaded by a specific user.
+        /// </summary>
+        /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
+        /// <returns>The total count of game clips.</returns>
         Task<int> GetTotalClipsCountAsync(Guid userId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Retrieves a user including their interested games and platforms tracking collection state.
+        /// </summary>
+        /// <returns>The user entity with initialized navigation collections, or null if not found.</returns>
+        Task<User?> GetUserWithCollectionsAsync(Guid userId);
+
+        /// <summary>
+        /// Synchronizes the many-to-many collections for interested games and platforms, and persists changes.
+        /// </summary>
+        /// <param name="incomingGameIds">The definitive list of game IDs the user is interested in.</param>
+        /// <param name="incomingPlatformIds">The definitive list of platform IDs the user plays on.</param>
+        Task UpdateUserProfileCollectionsAsync(User user, List<Guid> incomingGameIds, List<int> incomingPlatformIds);
     }
 
     /// <summary>
@@ -80,14 +100,17 @@ namespace Spectrum.API.Repositories
     public class UserRepository : IUserRepository
     {
         private readonly SpectrumDbContext _context;
+        private readonly IGameRepository _gameRepository;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="UserRepository"/> class.
         /// </summary>
         /// <param name="context">The Entity Framework database context.</param>
-        public UserRepository(SpectrumDbContext context)
+        /// <param name="gameRepository">The game repository.</param>
+        public UserRepository(SpectrumDbContext context, IGameRepository gameRepository)
         {
             _context = context;
+            _gameRepository = gameRepository;
         }
 
         /// <inheritdoc />
@@ -192,16 +215,99 @@ namespace Spectrum.API.Repositories
             };
         }
 
+        /// <inheritdoc />
         public async Task<int> GetTotalReviewsCountAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             return await _context.Reviews
                 .CountAsync(r => r.UserId == userId, cancellationToken);
         }
 
+        /// <inheritdoc />
         public async Task<int> GetTotalClipsCountAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             return await _context.GameClips
                 .CountAsync(c => c.UserId == userId, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public async Task<User?> GetUserWithCollectionsAsync(Guid userId)
+        {
+            return await _context.Users
+                .Include(u => u.InterestedGames)
+                .Include(u => u.Platforms)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+        }
+
+        /// <inheritdoc />
+        public async Task UpdateUserProfileCollectionsAsync(User user, List<Guid> incomingGameIds, List<int> incomingPlatformIds)
+        {
+            await SyncInterestedGamesAsync(user, incomingGameIds);
+            await SyncPlatformsAsync(user, incomingPlatformIds);
+            
+            await _context.SaveChangesAsync();
+        }
+
+
+        private async Task SyncInterestedGamesAsync(User user, List<Guid> incomingGameIds)
+        {
+            var gamesToRemove = user.InterestedGames.Where(g => !incomingGameIds.Contains(g.Id)).ToList();
+
+            foreach (var game in gamesToRemove)
+                user.InterestedGames.Remove(game);
+
+            var existingGameIds = user.InterestedGames.Select(g => g.Id).ToHashSet();
+            var gamesToAddIds = incomingGameIds.Except(existingGameIds).ToList();
+
+            foreach (var gameId in gamesToAddIds)
+            {
+                var gameToAdd = await ResolveAndTrackGameAsync(gameId);
+
+                if (gameToAdd != null)
+                    user.InterestedGames.Add(gameToAdd);
+            }
+
+        }
+
+        private async Task SyncPlatformsAsync(User user, List<int> incomingPlatformIds)
+        {
+            var platformsToRemove = user.Platforms.Where(p => !incomingPlatformIds.Contains(p.Id)).ToList();
+            foreach (var platform in platformsToRemove)
+            {
+                user.Platforms.Remove(platform);
+            }
+
+            var existingPlatformIds = user.Platforms.Select(p => p.Id).ToHashSet();
+            var platformsToAddIds = incomingPlatformIds.Except(existingPlatformIds).ToList();
+
+            if (platformsToAddIds.Any())
+            {
+                var platformsToAdd = await _context.Platforms
+                    .Where(p => platformsToAddIds.Contains(p.Id))
+                    .ToListAsync();
+
+                foreach (var platform in platformsToAdd)
+                {
+                    user.Platforms.Add(platform);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Search games. Look at EF caché, then BD, if it not exists, look in the in-memory catalog and prepare it for insertion.
+        /// </summary>
+        private async Task<Game?> ResolveAndTrackGameAsync(Guid gameId)
+        {
+            var localGame = _context.Games.Local.FirstOrDefault(g => g.Id == gameId);
+            if (localGame != null) return localGame;
+
+            var dbGame = await _context.Games.FirstOrDefaultAsync(g => g.Id == gameId);
+            if (dbGame != null) return dbGame;
+
+            var gameFromCatalog = _gameRepository.GetByGuid(gameId);
+            if (gameFromCatalog is null) return null;
+
+            _context.Games.Add(gameFromCatalog); 
+            return gameFromCatalog;
         }
     }
 }

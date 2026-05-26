@@ -37,7 +37,7 @@
         /// </summary>
         /// <param name="rawgId">The unique numeric identifier from the RAWG API.</param>
         /// <returns>A stable <see cref="Guid"/> that is consistent across application restarts and re-syncs.</returns>
-        private static Guid GenerateDeterministicGuid(int rawgId)
+        public static Guid GenerateDeterministicGuid(int rawgId)
         {
             var namespaceBytes = "spectrum-games-namespace"u8.ToArray();
             var idBytes = BitConverter.GetBytes(rawgId);

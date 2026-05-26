@@ -115,6 +115,7 @@ builder.Services.AddScoped<IDropsService, DropsService>();
 builder.Services.AddScoped<IImageStorageService, ImageStorageService>();
 builder.Services.AddScoped<IVideoStorageService, VideoStorageService>();
 builder.Services.AddScoped<IGameClipService, GameClipService>();
+builder.Services.AddScoped<IGameClipRepository, GameClipRepository>(); 
 
 Console.WriteLine("[SPECTRUM API] Registering Game Catalog Services (Memory Cache & Sync)...");
 builder.Services.AddSingleton<IGameRepository, GameRepository>();
