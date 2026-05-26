@@ -20,7 +20,7 @@ namespace Spectrum.API.Dtos.Media
         public string KeyName { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string? Description { get; set; }
-        public Guid GameId { get; set; }
+        public int GameId { get; set; }
 
         public List<PartEtagDto> Etags { get; set; } = new();
     }

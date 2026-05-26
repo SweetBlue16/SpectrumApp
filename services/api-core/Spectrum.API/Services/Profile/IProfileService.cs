@@ -25,23 +25,27 @@ namespace Spectrum.API.Services.Profile
         /// <summary>
         /// Updates the profile information for an existing user.
         /// </summary>
+        /// <param name="userId">The unique identifier of the user to update.</param>
         /// <param name="profileDto">The updated profile data.</param>
         Task UpdateUserProfileAsync(Guid userId, UserProfileDto profileDto);
 
         /// <summary>
         /// Updates the user's password after verifying the current one.
         /// </summary>
+        /// <param name="userId">The unique identifier of the user changing the password.</param>
         /// <param name="passwordDto">The data containing current and new passwords.</param>
         Task ChangePasswordAsync(Guid userId, ChangePasswordDto passwordDto);
 
         /// <summary>
         /// Requests a verification code to initiate a secure password change process.
         /// </summary>
+        /// <param name="userId">The unique identifier of the user.</param>
         Task RequestPasswordChangeCodeAsync(Guid userId);
 
         /// <summary>
         /// Verifies the password change token received by the user.
         /// </summary>
+        /// <param name="userId">The unique identifier of the user.</param>
         /// <param name="verifyDto">The data containing the verification code.</param>
         /// <returns>A secure session token if verification passes.</returns>
         Task<string> VerifyPasswordChangeCodeAsync(Guid userId, VerifyPasswordChangeCodeDto verifyDto);
@@ -50,12 +54,14 @@ namespace Spectrum.API.Services.Profile
         /// Confirms the password change using the generated session token.
         /// </summary>
         /// <param name="confirmDto">The payload containing the new password and verification token.</param>
+        /// <param name="userId">The unique identifier of the user.</param>
         Task ConfirmPasswordChangeAsync(Guid userId, ConfirmPasswordChangeDto confirmDto);
 
         /// <summary>
         /// Uploads a new profile picture to AWS S3 and updates the user's avatar URL record.
         /// </summary>
         /// <param name="file">The image file payload.</param>
+        /// <param name="userId">The unique identifier of the user.</param>
         /// <returns>The public URL of the newly uploaded profile picture.</returns>
         Task<string> UpdateAvatarAsync(Guid userId, IFormFile file);
     }
@@ -146,10 +152,12 @@ namespace Spectrum.API.Services.Profile
                     return Guid.Empty;
                 })
                 .Where(id => id != Guid.Empty)
+                .Distinct()
                 .ToList();
 
             var incomingPlatformIds = profileDto.Platforms.
                 Select(p => p.Id)
+                .Distinct()
                 .ToList();
 
             await _userRepository.UpdateUserProfileCollectionsAsync(user, incomingGameIds, incomingPlatformIds);

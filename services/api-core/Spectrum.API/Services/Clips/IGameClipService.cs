@@ -16,6 +16,7 @@ namespace Spectrum.API.Services.Clips
         /// <summary>
         /// Creates a new game clip record in the database after a successful upload to AWS S3.
         /// </summary>
+        /// <param name="userId">The unique identifier of the authenticated user.</param> 
         /// <param name="request">The request payload containing metadata about the video upload.</param>
         /// <param name="videoUrl">The public cloud URL where the raw video file is stored.</param>
         Task CreateClipAsync(Guid userId, CompleteUploadRequestDto request, string videoUrl);
@@ -65,17 +66,20 @@ namespace Spectrum.API.Services.Clips
         /// <inheritdoc />
         public async Task CreateClipAsync(Guid userId, CompleteUploadRequestDto request, string videoUrl)
         {
-            var gameExists = await _clipRepository.GameExistsAsync(request.GameId);
+            Guid stableGameGuid = Spectrum.API.Utilities.GameMappingUtilities.GenerateDeterministicGuid(request.GameId);
+
+            var gameExists = await _clipRepository.GameExistsAsync(stableGameGuid);
 
             if (!gameExists)
             {
-                var gameFromCatalog = _gameRepository.GetByGuid(request.GameId);
+                var gameFromCatalog = _gameRepository.GetById(request.GameId);
 
                 if (gameFromCatalog == null)
                 {
                     throw new SpectrumNotFoundException("The specified game was not found in the catalog cache.");
                 }
 
+                gameFromCatalog.Id = stableGameGuid;
                 await _clipRepository.AddGameAsync(gameFromCatalog);
                 await _clipRepository.SaveChangesAsync();
             }
@@ -83,9 +87,9 @@ namespace Spectrum.API.Services.Clips
             var newClip = new GameClip
             {
                 UserId = userId,
-                GameId = request.GameId,
+                GameId = stableGameGuid,
                 Title = request.Title,
-                Description = request.Description,
+                Description = request.Description ?? string.Empty,
                 Url = videoUrl,
                 CreatedAt = DateTime.UtcNow
             };

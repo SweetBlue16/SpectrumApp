@@ -69,6 +69,7 @@ namespace Spectrum.API.Repositories
         /// <summary>
         /// Retrieves the total number of reviews published by a specific user.
         /// </summary>
+        /// <param name="userId">The unique identifier of the user.</param>
         /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
         /// <returns>The total count of reviews.</returns>
         Task<int> GetTotalReviewsCountAsync(Guid userId, CancellationToken cancellationToken = default);
@@ -76,6 +77,7 @@ namespace Spectrum.API.Repositories
         /// <summary>
         /// Retrieves the total number of game clips uploaded by a specific user.
         /// </summary>
+        /// <param name="userId">The unique identifier of the user.</param>
         /// <param name="cancellationToken">A token to observe while waiting for the task to complete.</param>
         /// <returns>The total count of game clips.</returns>
         Task<int> GetTotalClipsCountAsync(Guid userId, CancellationToken cancellationToken = default);
@@ -89,6 +91,7 @@ namespace Spectrum.API.Repositories
         /// <summary>
         /// Synchronizes the many-to-many collections for interested games and platforms, and persists changes.
         /// </summary>
+        /// <param name="user">The user entity context instance to synchronize.</param>
         /// <param name="incomingGameIds">The definitive list of game IDs the user is interested in.</param>
         /// <param name="incomingPlatformIds">The definitive list of platform IDs the user plays on.</param>
         Task UpdateUserProfileCollectionsAsync(User user, List<Guid> incomingGameIds, List<int> incomingPlatformIds);

@@ -73,6 +73,10 @@ namespace Spectrum.API.Data
                 .HasIndex(user => user.Email)
                 .IsUnique();
 
+            modelBuilder.Entity<Game>()
+                .HasIndex(game => game.RawgId)
+                .IsUnique();
+
             modelBuilder.Entity<VerificationCode>()
                 .Property(code => code.Purpose)
                 .HasConversion<string>()
