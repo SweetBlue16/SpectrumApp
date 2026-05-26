@@ -81,7 +81,7 @@ namespace Spectrum.API.Utilities
         {
             if (user == null || user.IsDeleted)
             {
-                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.UserNotFound);
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.InvalidCredentials);
             }
 
             if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
@@ -92,6 +92,11 @@ namespace Spectrum.API.Utilities
             if (user.IsSuspended)
             {
                 throw new SpectrumUnauthorizedException(Constants.ErrorMessages.AccountSuspended);
+            }
+
+            if (!user.IsEmailVerified)
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.AccountNotVerified);
             }
         }
 

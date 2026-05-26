@@ -2,6 +2,7 @@
 using Spectrum.API.Exceptions;
 using Spectrum.API.Models;
 using Spectrum.API.Repositories;
+using Spectrum.API.Services.Email;
 using Spectrum.API.Utilities;
 using Google.Apis.Auth;
 using static Google.Apis.Auth.GoogleJsonWebSignature;
@@ -20,7 +21,7 @@ namespace Spectrum.API.Services.Auth
         /// <param name="registerDto">The registration information for the new user, including username, email, and password. Cannot be null.</param>
         /// <returns>An <see cref="AuthResponseDto"/> containing the authentication token and account details for the newly registered user.</returns>
         /// <exception cref="SpectrumBusinessException">Thrown when the email or username is already registered.</exception>
-        Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto);
+        Task<RegisterResponseDto> RegisterAsync(RegisterDto registerDto);
 
         /// <summary>
         /// Registers a new administrator account using the provided registration details and a master key.
@@ -47,6 +48,12 @@ namespace Spectrum.API.Services.Auth
         /// <returns>An <see cref="AuthResponseDto"/> containing the local JWT, username, and email of the authenticated user.</returns>
         /// <exception cref="SpectrumUnauthorizedException">Thrown if the Google token is invalid or if the associated local account is suspended.</exception>
         Task<AuthResponseDto> GoogleLoginAsync(GoogleAuthDto googleAuthDto);
+
+        Task<AuthResponseDto> VerifyRegistrationAsync(VerifyRegistrationCodeDto verifyDto);
+        Task<MessageResponseDto> ResendRegistrationCodeAsync(ResendRegistrationCodeDto resendDto);
+        Task<MessageResponseDto> ForgotPasswordAsync(ForgotPasswordDto forgotPasswordDto);
+        Task<PasswordCodeVerifiedDto> VerifyPasswordResetCodeAsync(VerifyPasswordCodeDto verifyDto);
+        Task<MessageResponseDto> ResetPasswordAsync(ResetPasswordDto resetPasswordDto);
     }
 
     /// <summary>
@@ -58,6 +65,8 @@ namespace Spectrum.API.Services.Auth
         private readonly IUserRepository _userRepository;
         private readonly IAdminDetailRepository _adminDetailRepository;
         private readonly IConfiguration _configuration;
+        private readonly IVerificationCodeService _verificationCodeService;
+        private readonly IEmailService _emailService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AuthService"/> class with the specified repositories 
@@ -66,11 +75,20 @@ namespace Spectrum.API.Services.Auth
         /// <param name="userRepository">The user repository used to access and manage user data. Cannot be null.</param>
         /// <param name="adminDetailRepository">The admin detail repository used to access and manage admin details. Cannot be null.</param>
         /// <param name="configuration">The configuration settings used to retrieve authentication-related options. Cannot be null.</param>
-        public AuthService(IUserRepository userRepository, IAdminDetailRepository adminDetailRepository, IConfiguration configuration)
+        /// <param name="verificationCodeService">The service responsible for one-time verification codes.</param>
+        /// <param name="emailService">The service responsible for delivering transactional email.</param>
+        public AuthService(
+            IUserRepository userRepository,
+            IAdminDetailRepository adminDetailRepository,
+            IConfiguration configuration,
+            IVerificationCodeService verificationCodeService,
+            IEmailService emailService)
         {
             _userRepository = userRepository;
             _configuration = configuration;
             _adminDetailRepository = adminDetailRepository;
+            _verificationCodeService = verificationCodeService;
+            _emailService = emailService;
         }
 
         /// <inheritdoc />
@@ -103,17 +121,11 @@ namespace Spectrum.API.Services.Auth
         /// <inheritdoc />
         public async Task<AuthResponseDto> LoginAsync(LoginDto loginDto)
         {
-            var user = await _userRepository.GetUserByEmailAsync(loginDto.Email);
+            var user = await _userRepository.GetUserByEmailAsync(NormalizeEmail(loginDto.Email));
             await AuthUtilities.ValidateLoginInput(user, loginDto);
             var authenticatedUser = user!;
 
-            return new AuthResponseDto
-            {
-                Token = AuthUtilities.GenerateJwtToken(authenticatedUser, _configuration),
-                Username = authenticatedUser.Username,
-                Email = authenticatedUser.Email,
-                Role = authenticatedUser.Role
-            };
+            return BuildAuthResponse(authenticatedUser);
         }
 
         /// <inheritdoc />
@@ -129,7 +141,8 @@ namespace Spectrum.API.Services.Auth
                 Email = registerAdminDto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerAdminDto.Password),
                 CreatedAt = DateTime.UtcNow,
-                Role = Constants.Roles.Admin
+                Role = Constants.Roles.Admin,
+                IsEmailVerified = true
             };
             var createdUser = await _userRepository.AddUserAsync(user);
 
@@ -155,28 +168,142 @@ namespace Spectrum.API.Services.Auth
         }
 
         /// <inheritdoc />
-        public async Task<AuthResponseDto> RegisterAsync(RegisterDto registerDto)
+        public async Task<RegisterResponseDto> RegisterAsync(RegisterDto registerDto)
         {
             await AuthUtilities.ValidateRegisterInput(registerDto, _userRepository);
             var user = new User
             {
                 Username = registerDto.Username,
-                Email = registerDto.Email,
+                Email = NormalizeEmail(registerDto.Email),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password),
                 CreatedAt = DateTime.UtcNow,
                 Role = Constants.Roles.Reviewer,
                 IsSuspended = false,
-                IsDeleted = false
+                IsDeleted = false,
+                IsEmailVerified = false
             };
 
             await _userRepository.AddUserAsync(user);
-            return new AuthResponseDto
+            var code = await _verificationCodeService.CreateCodeAsync(VerificationPurpose.RegisterVerification, user.Email, user.Id);
+            try
             {
-                Token = AuthUtilities.GenerateJwtToken(user, _configuration),
-                Username = user.Username,
+                await _emailService.SendRegistrationVerificationAsync(user.Email, code);
+            }
+            catch (SpectrumServiceUnavailableException)
+            {
+                user.IsDeleted = true;
+                await _userRepository.UpdateUserAsync(user);
+                throw;
+            }
+
+            return new RegisterResponseDto
+            {
                 Email = user.Email,
-                Role = user.Role
+                RequiresVerification = true,
+                Message = Constants.ErrorMessages.VerificationCodeSent
             };
+        }
+
+        public async Task<AuthResponseDto> VerifyRegistrationAsync(VerifyRegistrationCodeDto verifyDto)
+        {
+            var email = NormalizeEmail(verifyDto.Email);
+            var user = await _userRepository.GetUserByEmailAsync(email);
+            if (user == null)
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.VerificationCodeInvalid);
+            }
+
+            await _verificationCodeService.ConsumeCodeAsync(
+                VerificationPurpose.RegisterVerification,
+                email,
+                verifyDto.Code,
+                user.Id
+            );
+
+            user.IsEmailVerified = true;
+            await _userRepository.UpdateUserAsync(user);
+
+            return BuildAuthResponse(user);
+        }
+
+        public async Task<MessageResponseDto> ResendRegistrationCodeAsync(ResendRegistrationCodeDto resendDto)
+        {
+            var email = NormalizeEmail(resendDto.Email);
+            var user = await _userRepository.GetUserByEmailAsync(email);
+            if (user == null || user.IsEmailVerified)
+            {
+                return new MessageResponseDto { Message = Constants.ErrorMessages.VerificationCodeSent };
+            }
+
+            var code = await _verificationCodeService.CreateCodeAsync(VerificationPurpose.RegisterVerification, email, user.Id);
+            await _emailService.SendRegistrationVerificationAsync(email, code);
+
+            return new MessageResponseDto { Message = Constants.ErrorMessages.VerificationCodeSent };
+        }
+
+        public async Task<MessageResponseDto> ForgotPasswordAsync(ForgotPasswordDto forgotPasswordDto)
+        {
+            var email = NormalizeEmail(forgotPasswordDto.Email);
+            var user = await _userRepository.GetUserByEmailAsync(email);
+            if (user != null && user.IsEmailVerified && !user.IsSuspended)
+            {
+                try
+                {
+                    var code = await _verificationCodeService.CreateCodeAsync(VerificationPurpose.PasswordReset, email, user.Id);
+                    await _emailService.SendPasswordResetAsync(email, code);
+                }
+                catch (SpectrumBusinessException)
+                {
+                    return new MessageResponseDto { Message = Constants.ErrorMessages.PasswordResetInstructionsSent };
+                }
+            }
+
+            return new MessageResponseDto { Message = Constants.ErrorMessages.PasswordResetInstructionsSent };
+        }
+
+        public async Task<PasswordCodeVerifiedDto> VerifyPasswordResetCodeAsync(VerifyPasswordCodeDto verifyDto)
+        {
+            var email = NormalizeEmail(verifyDto.Email);
+            var user = await _userRepository.GetUserByEmailAsync(email);
+            if (user == null)
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.VerificationCodeInvalid);
+            }
+
+            var token = await _verificationCodeService.VerifyCodeAndCreateSessionAsync(
+                VerificationPurpose.PasswordReset,
+                email,
+                verifyDto.Code,
+                user.Id
+            );
+
+            return new PasswordCodeVerifiedDto
+            {
+                VerificationToken = token,
+                Message = "verificationCodeVerified"
+            };
+        }
+
+        public async Task<MessageResponseDto> ResetPasswordAsync(ResetPasswordDto resetPasswordDto)
+        {
+            var email = NormalizeEmail(resetPasswordDto.Email);
+            var user = await _userRepository.GetUserByEmailAsync(email);
+            if (user == null)
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.VerificationCodeInvalid);
+            }
+
+            await _verificationCodeService.ConsumeSessionAsync(
+                VerificationPurpose.PasswordReset,
+                email,
+                resetPasswordDto.VerificationToken,
+                user.Id
+            );
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(resetPasswordDto.NewPassword);
+            await _userRepository.UpdateUserAsync(user);
+
+            return new MessageResponseDto { Message = "passwordUpdated" };
         }
 
         /// <summary>
@@ -199,7 +326,8 @@ namespace Spectrum.API.Services.Auth
                     CreatedAt = DateTime.UtcNow,
                     Role = Constants.Roles.Reviewer,
                     IsSuspended = false,
-                    IsDeleted = false
+                    IsDeleted = false,
+                    IsEmailVerified = payload.EmailVerified
                 };
                 await _userRepository.AddUserAsync(user);
             }
@@ -207,7 +335,28 @@ namespace Spectrum.API.Services.Auth
             {
                 throw new SpectrumUnauthorizedException(Constants.ErrorMessages.AccountSuspended);
             }
+            else if (payload.EmailVerified && !user.IsEmailVerified)
+            {
+                user.IsEmailVerified = true;
+                await _userRepository.UpdateUserAsync(user);
+            }
             return user;
+        }
+
+        private AuthResponseDto BuildAuthResponse(User user)
+        {
+            return new AuthResponseDto
+            {
+                Token = AuthUtilities.GenerateJwtToken(user, _configuration),
+                Username = user.Username,
+                Email = user.Email,
+                Role = user.Role
+            };
+        }
+
+        private static string NormalizeEmail(string email)
+        {
+            return email.Trim().ToLowerInvariant();
         }
     }
 }

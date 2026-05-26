@@ -66,6 +66,15 @@
             public const string ExternalCatalogUnavailable = "externalCatalogUnavailable";
             public const string RpcServiceUnavailable = "rpcServiceUnavailable";
             public const string DatabaseTimeout = "databaseTimeout";
+            public const string AccountNotVerified = "accountNotVerified";
+            public const string VerificationCodeInvalid = "verificationCodeInvalid";
+            public const string VerificationCodeExpired = "verificationCodeExpired";
+            public const string VerificationCodeTooManyAttempts = "verificationCodeTooManyAttempts";
+            public const string VerificationCodeSent = "verificationCodeSent";
+            public const string PasswordResetInstructionsSent = "passwordResetInstructionsSent";
+            public const string PasswordPolicyViolation = "passwordPolicyViolation";
+            public const string SmtpConfigurationInvalid = "smtpConfigurationInvalid";
+            public const string ResendCodeTooSoon = "resendCodeTooSoon";
         }
     }
 }

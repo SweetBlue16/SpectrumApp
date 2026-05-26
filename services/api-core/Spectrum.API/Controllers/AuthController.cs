@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Dtos.Auth;
+using Microsoft.AspNetCore.RateLimiting;
 using Spectrum.API.Services.Auth;
 
 namespace Spectrum.API.Controllers
@@ -12,6 +13,7 @@ namespace Spectrum.API.Controllers
     [ApiController]
     [Route("api/[controller]")]
     [Produces("application/json")]
+    [EnableRateLimiting("SensitiveAuth")]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
@@ -29,16 +31,33 @@ namespace Spectrum.API.Controllers
         /// Provisions a new standard user account (Reviewer) in the local database.
         /// </summary>
         /// <param name="registerDto">The data transfer object containing the desired username, email, and password.</param>
-        /// <returns>The newly created user's identity details and an active JSON Web Token.</returns>
-        /// <response code="201">Successfully created the user and issued a token.</response>
+        /// <returns>A response indicating that email verification is required.</returns>
+        /// <response code="201">Successfully created the user and sent a verification code.</response>
         /// <response code="400">The payload failed validation or the email/username is already in use.</response>
         [HttpPost("register")]
-        [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(RegisterResponseDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Register([FromBody] RegisterDto registerDto)
         {
             var response = await _authService.RegisterAsync(registerDto);
-            return CreatedAtAction(nameof(Login), new { id = response.Token }, response);
+            return CreatedAtAction(nameof(Login), new { email = response.Email }, response);
+        }
+
+        [HttpPost("register/verify")]
+        [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> VerifyRegistration([FromBody] VerifyRegistrationCodeDto verifyDto)
+        {
+            var response = await _authService.VerifyRegistrationAsync(verifyDto);
+            return Ok(response);
+        }
+
+        [HttpPost("register/resend-code")]
+        [ProducesResponseType(typeof(MessageResponseDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ResendRegistrationCode([FromBody] ResendRegistrationCodeDto resendDto)
+        {
+            var response = await _authService.ResendRegistrationCodeAsync(resendDto);
+            return Ok(response);
         }
 
         /// <summary>
@@ -71,6 +90,32 @@ namespace Spectrum.API.Controllers
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleAuthDto googleAuthDto)
         {
             var response = await _authService.GoogleLoginAsync(googleAuthDto);
+            return Ok(response);
+        }
+
+        [HttpPost("password/forgot")]
+        [ProducesResponseType(typeof(MessageResponseDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto forgotPasswordDto)
+        {
+            var response = await _authService.ForgotPasswordAsync(forgotPasswordDto);
+            return Ok(response);
+        }
+
+        [HttpPost("password/verify-code")]
+        [ProducesResponseType(typeof(PasswordCodeVerifiedDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> VerifyPasswordResetCode([FromBody] VerifyPasswordCodeDto verifyDto)
+        {
+            var response = await _authService.VerifyPasswordResetCodeAsync(verifyDto);
+            return Ok(response);
+        }
+
+        [HttpPost("password/reset")]
+        [ProducesResponseType(typeof(MessageResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto resetPasswordDto)
+        {
+            var response = await _authService.ResetPasswordAsync(resetPasswordDto);
             return Ok(response);
         }
 

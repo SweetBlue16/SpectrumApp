@@ -31,7 +31,7 @@ namespace Spectrum.Tests.UnitTests.Utilities
             var exception = await Assert.ThrowsAsync<SpectrumUnauthorizedException>(() =>
                 AuthUtilities.ValidateLoginInput(nullUser, loginDto));
 
-            Assert.Equal(Constants.ErrorMessages.UserNotFound, exception.Message);
+            Assert.Equal(Constants.ErrorMessages.InvalidCredentials, exception.Message);
         }
 
         [Fact]
@@ -43,7 +43,7 @@ namespace Spectrum.Tests.UnitTests.Utilities
             var exception = await Assert.ThrowsAsync<SpectrumUnauthorizedException>(() =>
                 AuthUtilities.ValidateLoginInput(deletedUser, loginDto));
 
-            Assert.Equal(Constants.ErrorMessages.UserNotFound, exception.Message);
+            Assert.Equal(Constants.ErrorMessages.InvalidCredentials, exception.Message);
         }
 
         [Fact]
@@ -51,7 +51,8 @@ namespace Spectrum.Tests.UnitTests.Utilities
         {
             var user = new User
             {
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("CorrectPassword123!")
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("CorrectPassword123!"),
+                IsEmailVerified = true
             };
             var loginDto = new LoginDto { Password = "WrongPassword" };
 
@@ -67,7 +68,8 @@ namespace Spectrum.Tests.UnitTests.Utilities
             var user = new User
             {
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword("CorrectPassword123!"),
-                IsSuspended = true
+                IsSuspended = true,
+                IsEmailVerified = true
             };
             var loginDto = new LoginDto { Password = "CorrectPassword123!" };
 
@@ -84,7 +86,8 @@ namespace Spectrum.Tests.UnitTests.Utilities
             {
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword("CorrectPassword123!"),
                 IsSuspended = false,
-                IsDeleted = false
+                IsDeleted = false,
+                IsEmailVerified = true
             };
             var loginDto = new LoginDto { Password = "CorrectPassword123!" };
 

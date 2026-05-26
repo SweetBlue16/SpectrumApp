@@ -22,7 +22,12 @@ namespace Spectrum.Tests.UnitTests.Controllers
         public async Task TestRegisterWhenValidPayloadShouldReturnCreatedAtAction()
         {
             var registerDto = new RegisterDto { Username = "test", Email = "test@test.com", Password = "Password123!" };
-            var expectedResponse = new AuthResponseDto { Token = "jwt_token_here", Username = "test", Email = "test@test.com" };
+            var expectedResponse = new RegisterResponseDto
+            {
+                Email = "test@test.com",
+                RequiresVerification = true,
+                Message = "verificationCodeSent"
+            };
 
             _authServiceMock.Setup(s => s.RegisterAsync(registerDto)).ReturnsAsync(expectedResponse);
 
@@ -30,7 +35,7 @@ namespace Spectrum.Tests.UnitTests.Controllers
 
             var createdResult = Assert.IsType<CreatedAtActionResult>(result);
             Assert.Equal(nameof(_authController.Login), createdResult.ActionName);
-            Assert.Equal(expectedResponse.Token, createdResult.RouteValues?["id"]);
+            Assert.Equal(expectedResponse.Email, createdResult.RouteValues?["email"]);
             Assert.Equal(expectedResponse, createdResult.Value);
 
             _authServiceMock.Verify(s => s.RegisterAsync(registerDto), Times.Once);

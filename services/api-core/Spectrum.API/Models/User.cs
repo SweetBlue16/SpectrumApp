@@ -83,6 +83,9 @@ namespace Spectrum.API.Models
         [Column("is_deleted")]
         public bool IsDeleted { get; set; } = false;
 
+        [Column("is_email_verified")]
+        public bool IsEmailVerified { get; set; } = false;
+
         /// <summary>
         /// The exact UTC timestamp capturing when the user's identity was first provisioned in the database. 
         /// Used for auditing and account age verification.
@@ -108,6 +111,8 @@ namespace Spectrum.API.Models
         /// Use lot a lot relation through intermedium table
         /// </summary>
         public virtual ICollection<Platform> Platforms { get; set; } = new List<Platform>();
+
+        public virtual ICollection<VerificationCode> VerificationCodes { get; set; } = new List<VerificationCode>();
 
     }
 }

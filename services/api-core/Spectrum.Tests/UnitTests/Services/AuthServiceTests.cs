@@ -5,6 +5,7 @@ using Spectrum.API.Exceptions;
 using Spectrum.API.Models;
 using Spectrum.API.Repositories;
 using Spectrum.API.Services.Auth;
+using Spectrum.API.Services.Email;
 using Spectrum.API.Utilities;
 
 namespace Spectrum.Tests.UnitTests.Services
@@ -14,6 +15,8 @@ namespace Spectrum.Tests.UnitTests.Services
         private readonly Mock<IUserRepository> _userRepositoryMock;
         private readonly Mock<IAdminDetailRepository> _adminRepositoryMock;
         private readonly Mock<IConfiguration> _configMock;
+        private readonly Mock<IVerificationCodeService> _verificationCodeServiceMock;
+        private readonly Mock<IEmailService> _emailServiceMock;
         private readonly AuthService _authService;
 
         public AuthServiceTests()
@@ -21,6 +24,8 @@ namespace Spectrum.Tests.UnitTests.Services
             _userRepositoryMock = new Mock<IUserRepository>();
             _adminRepositoryMock = new Mock<IAdminDetailRepository>();
             _configMock = new Mock<IConfiguration>();
+            _verificationCodeServiceMock = new Mock<IVerificationCodeService>();
+            _emailServiceMock = new Mock<IEmailService>();
 
             _configMock.Setup(c => c["JwtSettings:Secret"]).Returns("ThisIsAVerySecureAndLongSecretKeyForTesting123!");
             _configMock.Setup(c => c["JwtSettings:Issuer"]).Returns("TestIssuer");
@@ -28,11 +33,17 @@ namespace Spectrum.Tests.UnitTests.Services
 
             _configMock.Setup(c => c["AdminSettings:MasterKey"]).Returns("SuperSecretMasterKey");
 
-            _authService = new AuthService(_userRepositoryMock.Object, _adminRepositoryMock.Object, _configMock.Object);
+            _authService = new AuthService(
+                _userRepositoryMock.Object,
+                _adminRepositoryMock.Object,
+                _configMock.Object,
+                _verificationCodeServiceMock.Object,
+                _emailServiceMock.Object
+            );
         }
 
         [Fact]
-        public async Task TestRegisterAsyncWhenValidInputShouldReturnAuthResponseDtoAndCreateUser()
+        public async Task TestRegisterAsyncWhenValidInputShouldReturnVerificationResponseAndCreateUser()
         {
             var registerDto = new RegisterDto
             {
@@ -44,15 +55,18 @@ namespace Spectrum.Tests.UnitTests.Services
             _userRepositoryMock.Setup(r => r.EmailExistsAsync(registerDto.Email)).ReturnsAsync(false);
             _userRepositoryMock.Setup(r => r.UsernameExistsAsync(registerDto.Username)).ReturnsAsync(false);
             _userRepositoryMock.Setup(r => r.AddUserAsync(It.IsAny<User>())).ReturnsAsync((User u) => u);
+            _verificationCodeServiceMock
+                .Setup(s => s.CreateCodeAsync(VerificationPurpose.RegisterVerification, registerDto.Email, It.IsAny<Guid?>()))
+                .ReturnsAsync("123456");
 
             var result = await _authService.RegisterAsync(registerDto);
 
             Assert.NotNull(result);
-            Assert.Equal(registerDto.Username, result.Username);
             Assert.Equal(registerDto.Email, result.Email);
-            Assert.False(string.IsNullOrWhiteSpace(result.Token));
+            Assert.True(result.RequiresVerification);
 
             _userRepositoryMock.Verify(r => r.AddUserAsync(It.IsAny<User>()), Times.Once);
+            _emailServiceMock.Verify(s => s.SendRegistrationVerificationAsync(registerDto.Email, "123456"), Times.Once);
         }
 
         [Fact]
@@ -95,7 +109,8 @@ namespace Spectrum.Tests.UnitTests.Services
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
                 Role = Constants.Roles.Reviewer,
                 IsDeleted = false,
-                IsSuspended = false
+                IsSuspended = false,
+                IsEmailVerified = true
             };
 
             _userRepositoryMock.Setup(r => r.GetUserByEmailAsync(loginDto.Email)).ReturnsAsync(existingUser);
@@ -117,7 +132,7 @@ namespace Spectrum.Tests.UnitTests.Services
             var exception = await Assert.ThrowsAsync<SpectrumUnauthorizedException>(() =>
                 _authService.LoginAsync(loginDto));
 
-            Assert.Equal(Constants.ErrorMessages.UserNotFound, exception.Message);
+            Assert.Equal(Constants.ErrorMessages.InvalidCredentials, exception.Message);
         }
 
         [Fact]
@@ -127,7 +142,8 @@ namespace Spectrum.Tests.UnitTests.Services
             var existingUser = new User
             {
                 Email = loginDto.Email,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("CorrectPassword123!")
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("CorrectPassword123!"),
+                IsEmailVerified = true
             };
 
             _userRepositoryMock.Setup(r => r.GetUserByEmailAsync(loginDto.Email)).ReturnsAsync(existingUser);
@@ -147,7 +163,8 @@ namespace Spectrum.Tests.UnitTests.Services
             {
                 Email = loginDto.Email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-                IsSuspended = true
+                IsSuspended = true,
+                IsEmailVerified = true
             };
 
             _userRepositoryMock.Setup(r => r.GetUserByEmailAsync(loginDto.Email)).ReturnsAsync(existingUser);

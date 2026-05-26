@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Spectrum.API.Configuration;
 using Spectrum.API.Data;
 using Spectrum.API.Grpc.Drops;
 using Spectrum.API.Grpc.Social;
@@ -9,6 +10,7 @@ using Spectrum.API.Middlewares;
 using Spectrum.API.Repositories;
 using Spectrum.API.Services.Auth;
 using Spectrum.API.Services.Drops;
+using Spectrum.API.Services.Email;
 using Spectrum.API.Services.External;
 using Spectrum.API.Services.Profile;
 using Spectrum.API.Services.Reports;
@@ -18,6 +20,7 @@ using Spectrum.API.Services.Storage;
 using Spectrum.API.Services.Clips;
 using System.Reflection;
 using System.Text;
+using System.Threading.RateLimiting;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -32,15 +35,61 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 
+builder.Services.AddOptions<SmtpOptions>()
+    .Bind(builder.Configuration.GetSection(SmtpOptions.SectionName))
+    .Configure(options =>
+    {
+        options.Host = Environment.GetEnvironmentVariable("SMTP_HOST") ?? options.Host;
+        options.Username = Environment.GetEnvironmentVariable("SMTP_USERNAME") ?? options.Username;
+        options.Password = Environment.GetEnvironmentVariable("SMTP_PASSWORD") ?? options.Password;
+        options.FromEmail = Environment.GetEnvironmentVariable("SMTP_FROM_EMAIL") ?? options.FromEmail;
+        options.FromName = Environment.GetEnvironmentVariable("SMTP_FROM_NAME") ?? options.FromName;
+
+        if (int.TryParse(Environment.GetEnvironmentVariable("SMTP_PORT"), out var smtpPort))
+        {
+            options.Port = smtpPort;
+        }
+
+        if (bool.TryParse(Environment.GetEnvironmentVariable("SMTP_USE_TLS"), out var useTls))
+        {
+            options.UseTls = useTls;
+        }
+    });
+builder.Services.AddOptions<VerificationCodeOptions>()
+    .Bind(builder.Configuration.GetSection(VerificationCodeOptions.SectionName));
+
 Console.WriteLine("[SPECTRUM API] Configuring CORS policy (AllowFrontend)...");
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader();
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        if (allowedOrigins.Length > 0)
+        {
+            policy.WithOrigins(allowedOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        }
+        else
+        {
+            policy.AllowAnyOrigin()
+                .AllowAnyMethod()
+                .AllowAnyHeader();
+        }
     });
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("SensitiveAuth", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
 });
 
 Console.WriteLine("[SPECTRUM API] Configuring PostgreSQL database context...");
@@ -54,6 +103,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAdminDetailRepository, AdminDetailRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IVerificationCodeService, VerificationCodeService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IReviewCommentService, ReviewCommentService>();
@@ -176,6 +227,7 @@ else
 app.UseExceptionHandler();
 
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -4,7 +4,10 @@ using Spectrum.API.Dtos.Profile;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Models;
 using Spectrum.API.Repositories;
+using Spectrum.API.Services.Auth;
+using Spectrum.API.Services.Email;
 using Spectrum.API.Services.Storage;
+using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Services.Profile
 {
@@ -34,6 +37,10 @@ namespace Spectrum.API.Services.Profile
         /// <param name="passwordDto">The data containing current and new passwords.</param>
         Task ChangePasswordAsync(Guid userId, ChangePasswordDto passwordDto);
 
+        Task RequestPasswordChangeCodeAsync(Guid userId);
+        Task<string> VerifyPasswordChangeCodeAsync(Guid userId, VerifyPasswordChangeCodeDto verifyDto);
+        Task ConfirmPasswordChangeAsync(Guid userId, ConfirmPasswordChangeDto confirmDto);
+
         /// <summary>
         /// Uploads a new profile picture to AWS S3 and updates the user's avatar URL record.
         /// </summary>
@@ -52,6 +59,8 @@ namespace Spectrum.API.Services.Profile
         private readonly SpectrumDbContext _context;
         private readonly IImageStorageService _imageStorageService;
         private readonly IGameRepository _gameRepository;
+        private readonly IVerificationCodeService _verificationCodeService;
+        private readonly IEmailService _emailService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ProfileService"/> class.
@@ -60,12 +69,22 @@ namespace Spectrum.API.Services.Profile
         /// <param name="context">The database context used for relation lookups.</param>
         /// <param name="imageStorageService">The service used for direct image uploads to AWS S3.</param>
         /// <param name="gameRepository">The in-memory game catalog used to resolve interested games.</param>
-        public ProfileService(IUserRepository userRepository, SpectrumDbContext context, IImageStorageService imageStorageService, IGameRepository gameRepository)
+        /// <param name="verificationCodeService">The service responsible for one-time verification codes.</param>
+        /// <param name="emailService">The service responsible for transactional email delivery.</param>
+        public ProfileService(
+            IUserRepository userRepository,
+            SpectrumDbContext context,
+            IImageStorageService imageStorageService,
+            IGameRepository gameRepository,
+            IVerificationCodeService verificationCodeService,
+            IEmailService emailService)
         {
             _userRepository = userRepository;
             _context = context;
             _imageStorageService = imageStorageService;
             _gameRepository = gameRepository;
+            _verificationCodeService = verificationCodeService;
+            _emailService = emailService;
         }
 
         /// <inheritdoc />
@@ -139,6 +158,43 @@ namespace Spectrum.API.Services.Profile
             
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(passwordDto.NewPassword);
 
+            await _userRepository.UpdateUserAsync(user);
+        }
+
+        public async Task RequestPasswordChangeCodeAsync(Guid userId)
+        {
+            var user = await GetExistingUserAsync(userId);
+            var code = await _verificationCodeService.CreateCodeAsync(
+                VerificationPurpose.PasswordChange,
+                user.Email,
+                user.Id
+            );
+
+            await _emailService.SendPasswordChangeAsync(user.Email, code);
+        }
+
+        public async Task<string> VerifyPasswordChangeCodeAsync(Guid userId, VerifyPasswordChangeCodeDto verifyDto)
+        {
+            var user = await GetExistingUserAsync(userId);
+            return await _verificationCodeService.VerifyCodeAndCreateSessionAsync(
+                VerificationPurpose.PasswordChange,
+                user.Email,
+                verifyDto.Code,
+                user.Id
+            );
+        }
+
+        public async Task ConfirmPasswordChangeAsync(Guid userId, ConfirmPasswordChangeDto confirmDto)
+        {
+            var user = await GetExistingUserAsync(userId);
+            await _verificationCodeService.ConsumeSessionAsync(
+                VerificationPurpose.PasswordChange,
+                user.Email,
+                confirmDto.VerificationToken,
+                user.Id
+            );
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(confirmDto.NewPassword);
             await _userRepository.UpdateUserAsync(user);
         }
 
@@ -241,6 +297,17 @@ namespace Spectrum.API.Services.Profile
                     user.Platforms.Add(platform);
                 }
             }
+        }
+
+        private async Task<User> GetExistingUserAsync(Guid userId)
+        {
+            var user = await _userRepository.GetUserByIdAsync(userId);
+            if (user == null)
+            {
+                throw new SpectrumNotFoundException(Constants.ErrorMessages.UserNotFound);
+            }
+
+            return user;
         }
 
     }

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Spectrum.API.Dtos.Auth;
 using Spectrum.API.Dtos.Profile;
 using Spectrum.API.Services.Profile;
 using System.Security.Claims;
@@ -109,6 +111,55 @@ namespace Spectrum.API.Controllers
             return NoContent();
         }
 
+        [HttpPost("me/password/change/request-code")]
+        [EnableRateLimiting("SensitiveAuth")]
+        [ProducesResponseType(typeof(MessageResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> RequestPasswordChangeCode()
+        {
+            if (!TryGetAuthenticatedUserId(out var userId))
+            {
+                return Unauthorized();
+            }
+
+            await profileService.RequestPasswordChangeCodeAsync(userId);
+            return Ok(new MessageResponseDto { Message = "verificationCodeSent" });
+        }
+
+        [HttpPost("me/password/change/verify-code")]
+        [EnableRateLimiting("SensitiveAuth")]
+        [ProducesResponseType(typeof(PasswordCodeVerifiedDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> VerifyPasswordChangeCode([FromBody] VerifyPasswordChangeCodeDto verifyDto)
+        {
+            if (!TryGetAuthenticatedUserId(out var userId))
+            {
+                return Unauthorized();
+            }
+
+            var verificationToken = await profileService.VerifyPasswordChangeCodeAsync(userId, verifyDto);
+            return Ok(new PasswordCodeVerifiedDto
+            {
+                VerificationToken = verificationToken,
+                Message = "verificationCodeVerified"
+            });
+        }
+
+        [HttpPost("me/password/change/confirm")]
+        [EnableRateLimiting("SensitiveAuth")]
+        [ProducesResponseType(typeof(MessageResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> ConfirmPasswordChange([FromBody] ConfirmPasswordChangeDto confirmDto)
+        {
+            if (!TryGetAuthenticatedUserId(out var userId))
+            {
+                return Unauthorized();
+            }
+
+            await profileService.ConfirmPasswordChangeAsync(userId, confirmDto);
+            return Ok(new MessageResponseDto { Message = "passwordUpdated" });
+        }
+
         /// <summary>
         /// Updates the authenticated user's profile picture using AWS S3 storage.
         /// </summary>
@@ -133,6 +184,14 @@ namespace Spectrum.API.Controllers
 
             var newAvatarUrl = await profileService.UpdateAvatarAsync(userId, file);
             return Ok(new { avatarUrl = newAvatarUrl });
+        }
+
+        private bool TryGetAuthenticatedUserId(out Guid userId)
+        {
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            return Guid.TryParse(userIdClaim, out userId);
         }
     }
 }

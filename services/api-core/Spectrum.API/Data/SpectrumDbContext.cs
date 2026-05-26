@@ -49,6 +49,8 @@ namespace Spectrum.API.Data
         /// </summary>
         public DbSet<GameClip> GameClips { get; set; }
 
+        public DbSet<VerificationCode> VerificationCodes { get; set; }
+
         /// <summary>
         /// Configures the relational database schema, entity relationships, and global query filters
         /// using the Fluent API. These configurations override data annotation attributes.
@@ -70,6 +72,20 @@ namespace Spectrum.API.Data
             modelBuilder.Entity<User>()
                 .HasIndex(user => user.Email)
                 .IsUnique();
+
+            modelBuilder.Entity<VerificationCode>()
+                .Property(code => code.Purpose)
+                .HasConversion<string>()
+                .HasMaxLength(40);
+
+            modelBuilder.Entity<VerificationCode>()
+                .HasIndex(code => new { code.Email, code.Purpose, code.UsedAt });
+
+            modelBuilder.Entity<VerificationCode>()
+                .HasOne(code => code.User)
+                .WithMany(user => user.VerificationCodes)
+                .HasForeignKey(code => code.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Review>()
                 .HasOne(review => review.User)
