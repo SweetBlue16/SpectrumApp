@@ -1,9 +1,8 @@
 spring:
   config:
     import: optional:file:../../infra/.env[.properties]
-  data:
-    mongodb:
-      uri: mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@${DB_MONGO_HOST:localhost}:${DB_MONGO_PORT:27017}/${DB_MONGO_SOCIAL_NAME}?authSource=admin
+  mongodb:
+    uri: mongodb://${DB_MONGO_USER}:${DB_MONGO_PASSWORD}@${DB_MONGO_HOST:localhost}:${DB_MONGO_PORT:27017}/${DB_MONGO_SOCIAL_NAME}?authSource=admin
 
 grpc:
   server:
