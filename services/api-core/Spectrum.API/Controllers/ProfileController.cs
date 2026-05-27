@@ -56,6 +56,30 @@ namespace Spectrum.API.Controllers
             return Ok(profile);
         }
 
+        [HttpGet("users/{userId:guid}")]
+        [ProducesResponseType(typeof(UserProfileDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<UserProfileDto>> GetPublicProfile(Guid userId)
+        {
+            var profile = await profileService.GetPublicUserProfileAsync(userId);
+            return Ok(profile);
+        }
+
+        [HttpPost("users/{userId:guid}/block")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> BlockUser(Guid userId, [FromBody] BlockUserDto dto)
+        {
+            if (!TryGetAuthenticatedUserId(out var blockerUserId))
+            {
+                return Unauthorized();
+            }
+
+            await profileService.BlockUserAsync(blockerUserId, userId, dto);
+            return NoContent();
+        }
+
         /// <summary>
         /// Updates the profile information for the authenticated user.
         /// </summary>

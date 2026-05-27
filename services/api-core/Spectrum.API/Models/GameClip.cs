@@ -35,6 +35,15 @@ namespace Spectrum.API.Models
         /// </summary>
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        [Column("is_deleted")]
+        public bool IsDeleted { get; set; }
+
+        [Column("deleted_at")]
+        public DateTime? DeletedAt { get; set; }
+
+        [Column("deleted_by_user_id")]
+        public Guid? DeletedByUserId { get; set; }
+
         [ForeignKey(nameof(UserId))]
         public virtual User User { get; set; } = null!;
 

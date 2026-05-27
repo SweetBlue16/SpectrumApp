@@ -49,6 +49,8 @@ namespace Spectrum.API.Data
         /// </summary>
         public DbSet<GameClip> GameClips { get; set; }
 
+        public DbSet<UserBlock> UserBlocks { get; set; }
+
         public DbSet<VerificationCode> VerificationCodes { get; set; }
 
         /// <summary>
@@ -62,6 +64,7 @@ namespace Spectrum.API.Data
 
             modelBuilder.Entity<User>().HasQueryFilter(user => !user.IsDeleted);
             modelBuilder.Entity<Review>().HasQueryFilter(review => !review.IsDeleted);
+            modelBuilder.Entity<GameClip>().HasQueryFilter(gameClip => !gameClip.IsDeleted);
 
             modelBuilder.Entity<AdminDetail>()
                 .HasOne(adminDetail => adminDetail.User)
@@ -177,7 +180,23 @@ namespace Spectrum.API.Data
                 .HasColumnName("description");
 
             modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.IsDeleted)
+                .HasColumnName("is_deleted");
+
+            modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.DeletedAt)
+                .HasColumnName("deleted_at");
+
+            modelBuilder.Entity<GameClip>()
+                .Property(gameClip => gameClip.DeletedByUserId)
+                .HasColumnName("deleted_by_user_id");
+
+            modelBuilder.Entity<GameClip>()
                 .HasIndex(gameClip => new { gameClip.UserId, gameClip.CreatedAt });
+
+            modelBuilder.Entity<UserBlock>()
+                .HasIndex(block => new { block.BlockerUserId, block.BlockedUserId })
+                .IsUnique();
         }
     }
 }

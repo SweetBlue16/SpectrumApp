@@ -1,6 +1,6 @@
-namespace Spectrum.API.Dtos.Analytics
+namespace Spectrum.API.Dtos.Home
 {
-    public class WeeklyReviewDto
+    public class HomeReviewDto
     {
         public Guid ReviewId { get; set; }
         public Guid UserId { get; set; }
@@ -10,8 +10,7 @@ namespace Spectrum.API.Dtos.Analytics
         public string GameCoverUrl { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
-        public string AttachmentUrl { get; set; } = string.Empty;
-        public string AttachmentType { get; set; } = string.Empty;
+        public int Rating { get; set; }
         public int LikesCount { get; set; }
         public int DislikesCount { get; set; }
         public int CommentsCount { get; set; }

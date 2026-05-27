@@ -116,6 +116,22 @@ namespace Spectrum.API.Controllers
             return Ok(reviews);
         }
 
+        [HttpGet("users/{userId:guid}")]
+        [Authorize]
+        public async Task<ActionResult<IReadOnlyList<ReviewResponseDto>>> GetByUser(
+            Guid userId,
+            CancellationToken cancellationToken
+        )
+        {
+            var reviews = await _reviewService.GetByUserIdAsync(
+                userId,
+                GetCurrentUserIdOrDefault(),
+                cancellationToken
+            );
+
+            return Ok(reviews);
+        }
+
         [HttpPost("{reviewId:guid}/vote")]
         [Authorize]
         public async Task<ActionResult<VoteResultDto>> Vote(

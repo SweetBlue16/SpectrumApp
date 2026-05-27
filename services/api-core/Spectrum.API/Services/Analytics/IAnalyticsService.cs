@@ -10,7 +10,10 @@ namespace Spectrum.API.Services.Analytics
     {
         Task<GlobalMetricsDto> GetGlobalMetricsAsync(string period, DateTime? anchorDate, CancellationToken cancellationToken = default);
         Task<WeeklyTrendsDto> GetWeeklyTrendsAsync(CancellationToken cancellationToken = default);
+        Task<TrendsDashboardDto> GetTrendsDashboardAsync(CancellationToken cancellationToken = default);
+        Task<CryptDashboardDto> GetCryptDashboardAsync(CancellationToken cancellationToken = default);
         Task<PagedResult<WeeklyReviewDto>> GetWeeklyClipsAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<WeeklyReviewDto>> GetMonthlyTopClipsAsync(CancellationToken cancellationToken = default);
     }
 
     public class AnalyticsService : IAnalyticsService
@@ -20,11 +23,17 @@ namespace Spectrum.API.Services.Analytics
 
         private readonly SpectrumDbContext _context;
         private readonly IGameRepository _gameRepository;
+        private readonly ICommentAnalyticsService _commentAnalyticsService;
 
-        public AnalyticsService(SpectrumDbContext context, IGameRepository gameRepository)
+        public AnalyticsService(
+            SpectrumDbContext context,
+            IGameRepository gameRepository,
+            ICommentAnalyticsService commentAnalyticsService
+        )
         {
             _context = context;
             _gameRepository = gameRepository;
+            _commentAnalyticsService = commentAnalyticsService;
         }
 
         public async Task<GlobalMetricsDto> GetGlobalMetricsAsync(
@@ -127,6 +136,117 @@ namespace Spectrum.API.Services.Analytics
             };
         }
 
+        public async Task<TrendsDashboardDto> GetTrendsDashboardAsync(CancellationToken cancellationToken = default)
+        {
+            var week = ResolveWeeklyWindow(DateTime.UtcNow);
+            var month = ResolveWindow("month", DateTime.UtcNow);
+
+            var weeklyReviews = await _context.Reviews
+                .AsNoTracking()
+                .Include(review => review.User)
+                .Where(review => review.CreatedAt >= week.Start && review.CreatedAt < week.End)
+                .ToListAsync(cancellationToken);
+
+            var monthlyReviews = await _context.Reviews
+                .AsNoTracking()
+                .Include(review => review.User)
+                .Where(review => review.CreatedAt >= month.Start && review.CreatedAt < month.End)
+                .ToListAsync(cancellationToken);
+
+            var weeklyCommentCounts = await _commentAnalyticsService.GetCommentCountsAsync(
+                weeklyReviews.Select(review => review.Id),
+                week.Start,
+                week.End,
+                cancellationToken
+            );
+
+            var monthlyPlatformPreferences = await _context.Users
+                .AsNoTracking()
+                .Where(user => user.CreatedAt >= month.Start && user.CreatedAt < month.End)
+                .SelectMany(user => user.Platforms)
+                .GroupBy(platform => new { platform.Id, platform.Name })
+                .Select(group => new NamedMetricDto
+                {
+                    Id = group.Key.Id.ToString(),
+                    Label = group.Key.Name,
+                    Count = group.Count()
+                })
+                .OrderByDescending(metric => metric.Count)
+                .Take(5)
+                .ToListAsync(cancellationToken);
+
+            return new TrendsDashboardDto
+            {
+                WeekStart = week.Start,
+                WeekEnd = week.End,
+                MonthStart = month.Start,
+                MonthEnd = month.End,
+                WeeklyInteractions = BuildGameInteractionMetrics(weeklyReviews, weeklyCommentCounts, TopGamesLimit),
+                WeeklyDiscussions = weeklyReviews
+                    .OrderByDescending(review => GetCommentCount(weeklyCommentCounts, review.Id))
+                    .ThenByDescending(review => review.LikesCount)
+                    .ThenByDescending(review => review.CreatedAt)
+                    .Take(3)
+                    .Select(review =>
+                    {
+                        var game = _gameRepository.GetById(review.GameId);
+                        return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl, GetCommentCount(weeklyCommentCounts, review.Id));
+                    })
+                    .ToList(),
+                WorstOfWeek = BuildRatingMetrics(weeklyReviews, takeWorst: true, limit: 3),
+                BestOfWeek = BuildRatingMetrics(weeklyReviews, takeWorst: false, limit: 3),
+                ConsoleOfMonth = monthlyPlatformPreferences,
+                TopReviewersOfMonth = monthlyReviews
+                    .GroupBy(review => new { review.UserId, Username = review.User?.Username ?? "Usuario Spectrum" })
+                    .Select(group => new NamedMetricDto
+                    {
+                        Id = group.Key.UserId.ToString(),
+                        Label = group.Key.Username,
+                        Count = group.Count(),
+                        Score = group.Sum(review => review.LikesCount)
+                    })
+                    .OrderByDescending(metric => metric.Score)
+                    .ThenBy(metric => metric.Label)
+                    .Take(5)
+                    .ToList(),
+                GenresOfMonth = BuildGenreMetrics(monthlyReviews)
+            };
+        }
+
+        public async Task<CryptDashboardDto> GetCryptDashboardAsync(CancellationToken cancellationToken = default)
+        {
+            var month = ResolveWindow("month", DateTime.UtcNow);
+            var monthlyReviews = await _context.Reviews
+                .AsNoTracking()
+                .Where(review => review.CreatedAt >= month.Start && review.CreatedAt < month.End)
+                .ToListAsync(cancellationToken);
+
+            var reviewedGameIds = monthlyReviews
+                .Select(review => review.GameId)
+                .Distinct()
+                .ToHashSet();
+
+            return new CryptDashboardDto
+            {
+                MonthStart = month.Start,
+                MonthEnd = month.End,
+                WorstGames = BuildRatingMetrics(monthlyReviews, takeWorst: true, limit: 5),
+                GamesWithoutReviews = _gameRepository.GetAll()
+                    .Where(game => game.RawgId > 0 && !reviewedGameIds.Contains(game.RawgId))
+                    .OrderByDescending(game => game.ReleaseDate ?? DateTime.MinValue)
+                    .Take(5)
+                    .Select(game => new NamedMetricDto
+                    {
+                        Id = game.RawgId.ToString(),
+                        Label = game.Title,
+                        ImageUrl = game.CoverImageUrl,
+                        Count = 0,
+                        Score = 0
+                    })
+                    .ToList()
+            };
+        }
+
         public async Task<PagedResult<WeeklyReviewDto>> GetWeeklyClipsAsync(
             int page,
             int pageSize,
@@ -168,6 +288,30 @@ namespace Spectrum.API.Services.Analytics
             };
         }
 
+        public async Task<IReadOnlyList<WeeklyReviewDto>> GetMonthlyTopClipsAsync(CancellationToken cancellationToken = default)
+        {
+            var window = ResolveWindow("month", DateTime.UtcNow);
+            var reviews = await _context.Reviews
+                .AsNoTracking()
+                .Include(review => review.User)
+                .Where(review => review.CreatedAt >= window.Start &&
+                                 review.CreatedAt < window.End &&
+                                 review.MediaType != null &&
+                                 review.MediaType.ToLower() == "video" &&
+                                 review.ImageUrl != null &&
+                                 review.ImageUrl != string.Empty)
+                .OrderByDescending(review => review.LikesCount)
+                .ThenByDescending(review => review.CreatedAt)
+                .Take(3)
+                .ToListAsync(cancellationToken);
+
+            return reviews.Select(review =>
+            {
+                var game = _gameRepository.GetById(review.GameId);
+                return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl);
+            }).ToList();
+        }
+
         private TopGameMetricDto MapTopGame(int gameId, int count)
         {
             var game = _gameRepository.GetById(gameId);
@@ -180,7 +324,91 @@ namespace Spectrum.API.Services.Analytics
             };
         }
 
-        private static WeeklyReviewDto MapWeeklyReview(Models.Review review, string? gameTitle, string? gameCoverUrl)
+        private static int GetCommentCount(IReadOnlyDictionary<Guid, int> counts, Guid reviewId)
+        {
+            return counts.TryGetValue(reviewId, out var count) ? count : 0;
+        }
+
+        private IReadOnlyList<NamedMetricDto> BuildGameInteractionMetrics(
+            IEnumerable<Models.Review> reviews,
+            IReadOnlyDictionary<Guid, int> commentCounts,
+            int limit
+        )
+        {
+            return reviews
+                .GroupBy(review => review.GameId)
+                .Select(group =>
+                {
+                    var game = _gameRepository.GetById(group.Key);
+                    var interactions = group.Count() + group.Sum(review => review.LikesCount + GetCommentCount(commentCounts, review.Id));
+                    return new NamedMetricDto
+                    {
+                        Id = group.Key.ToString(),
+                        Label = game?.Title ?? $"Game {group.Key}",
+                        Count = interactions,
+                        Score = interactions,
+                        ImageUrl = game?.CoverImageUrl
+                    };
+                })
+                .OrderByDescending(metric => metric.Count)
+                .ThenBy(metric => metric.Label)
+                .Take(limit)
+                .ToList();
+        }
+
+        private IReadOnlyList<NamedMetricDto> BuildRatingMetrics(IEnumerable<Models.Review> reviews, bool takeWorst, int limit)
+        {
+            var query = reviews
+                .GroupBy(review => review.GameId)
+                .Select(group =>
+                {
+                    var game = _gameRepository.GetById(group.Key);
+                    var average = group.Average(review => review.Rating);
+                    return new NamedMetricDto
+                    {
+                        Id = group.Key.ToString(),
+                        Label = game?.Title ?? $"Game {group.Key}",
+                        Count = group.Count(),
+                        Score = Math.Round(average, 2),
+                        ImageUrl = game?.CoverImageUrl
+                    };
+                });
+
+            return (takeWorst
+                    ? query.OrderBy(metric => metric.Score).ThenBy(metric => metric.Label)
+                    : query.OrderByDescending(metric => metric.Score).ThenBy(metric => metric.Label))
+                .Take(limit)
+                .ToList();
+        }
+
+        private IReadOnlyList<NamedMetricDto> BuildGenreMetrics(IEnumerable<Models.Review> reviews)
+        {
+            return reviews
+                .SelectMany(review =>
+                {
+                    var game = _gameRepository.GetById(review.GameId);
+                    return (game?.GenreIds ?? Enumerable.Empty<int>())
+                        .Select(genreId => new { GenreId = genreId, Interactions = 1 + review.LikesCount + review.DislikesCount });
+                })
+                .GroupBy(item => item.GenreId)
+                .Select(group => new NamedMetricDto
+                {
+                    Id = group.Key.ToString(),
+                    Label = $"Genero {group.Key}",
+                    Count = group.Sum(item => item.Interactions),
+                    Score = group.Sum(item => item.Interactions)
+                })
+                .OrderByDescending(metric => metric.Count)
+                .Take(5)
+                .ToList();
+        }
+
+        private static WeeklyReviewDto MapWeeklyReview(
+            Models.Review review,
+            string? gameTitle,
+            string? gameCoverUrl,
+            int commentsCount = 0
+        )
         {
             return new WeeklyReviewDto
             {
@@ -196,6 +424,7 @@ namespace Spectrum.API.Services.Analytics
                 AttachmentType = review.MediaType ?? string.Empty,
                 LikesCount = review.LikesCount,
                 DislikesCount = review.DislikesCount,
+                CommentsCount = commentsCount,
                 CreatedAt = review.CreatedAt
             };
         }

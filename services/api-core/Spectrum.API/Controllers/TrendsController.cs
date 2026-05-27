@@ -24,5 +24,13 @@ namespace Spectrum.API.Controllers
             var trends = await _analyticsService.GetWeeklyTrendsAsync(cancellationToken);
             return Ok(trends);
         }
+
+        [HttpGet("dashboard")]
+        [ProducesResponseType(typeof(TrendsDashboardDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetDashboard(CancellationToken cancellationToken)
+        {
+            var trends = await _analyticsService.GetTrendsDashboardAsync(cancellationToken);
+            return Ok(trends);
+        }
     }
 }

@@ -29,5 +29,12 @@ namespace Spectrum.API.Controllers
             var clips = await _analyticsService.GetWeeklyClipsAsync(page, pageSize, cancellationToken);
             return Ok(clips);
         }
+
+        [HttpGet("monthly-top")]
+        [ProducesResponseType(typeof(IReadOnlyList<WeeklyReviewDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetMonthlyTopClips(CancellationToken cancellationToken = default)
+        {
+            return Ok(await _analyticsService.GetMonthlyTopClipsAsync(cancellationToken));
+        }
     }
 }

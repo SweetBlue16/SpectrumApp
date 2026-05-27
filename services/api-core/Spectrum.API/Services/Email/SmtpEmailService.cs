@@ -24,8 +24,8 @@ namespace Spectrum.API.Services.Email
             return SendCodeAsync(
                 email,
                 "Verifica tu cuenta de Spectrum",
-                "Verificación de cuenta",
-                "Usa este código para activar tu cuenta en Spectrum:",
+                "Verificacion de cuenta",
+                "Usa este codigo para activar tu cuenta en Spectrum:",
                 code
             );
         }
@@ -34,9 +34,9 @@ namespace Spectrum.API.Services.Email
         {
             return SendCodeAsync(
                 email,
-                "Recupera tu contraseña de Spectrum",
-                "Recuperación de contraseña",
-                "Usa este código para continuar con la recuperación de tu contraseña:",
+                "Recupera tu contrasena de Spectrum",
+                "Recuperacion de contrasena",
+                "Usa este codigo para continuar con la recuperacion de tu contrasena:",
                 code
             );
         }
@@ -45,14 +45,38 @@ namespace Spectrum.API.Services.Email
         {
             return SendCodeAsync(
                 email,
-                "Confirma tu cambio de contraseña",
-                "Cambio de contraseña",
-                "Usa este código para confirmar el cambio de contraseña de tu cuenta:",
+                "Confirma tu cambio de contrasena",
+                "Cambio de contrasena",
+                "Usa este codigo para confirmar el cambio de contrasena de tu cuenta:",
                 code
             );
         }
 
-        private async Task SendCodeAsync(string email, string subject, string title, string intro, string code)
+        public Task SendRewardAsync(string email, string eventTitle, string rewardCode)
+        {
+            return SendCustomAsync(
+                email,
+                $"Tu recompensa de Spectrum: {eventTitle}",
+                "Ganaste un sorteo en Spectrum",
+                $"Felicidades. Ganaste el sorteo {eventTitle}. Tienes 24 horas para canjear este codigo:",
+                rewardCode,
+                "No compartas este codigo. Si no reconoces este premio, contacta al soporte de Spectrum."
+            );
+        }
+
+        private Task SendCodeAsync(string email, string subject, string title, string intro, string code)
+        {
+            return SendCustomAsync(
+                email,
+                subject,
+                title,
+                intro,
+                code,
+                "Este codigo expira pronto. Si no solicitaste este correo, puedes ignorarlo."
+            );
+        }
+
+        private async Task SendCustomAsync(string email, string subject, string title, string intro, string code, string footer)
         {
             EnsureConfigured();
 
@@ -60,7 +84,7 @@ namespace Spectrum.API.Services.Email
             {
                 From = new MailAddress(_options.FromEmail, _options.FromName),
                 Subject = subject,
-                Body = BuildHtmlTemplate(title, intro, code),
+                Body = BuildHtmlTemplate(title, intro, code, footer),
                 IsBodyHtml = true,
                 BodyEncoding = Encoding.UTF8,
                 SubjectEncoding = Encoding.UTF8
@@ -95,7 +119,7 @@ namespace Spectrum.API.Services.Email
             }
         }
 
-        private static string BuildHtmlTemplate(string title, string intro, string code)
+        private static string BuildHtmlTemplate(string title, string intro, string code, string footer)
         {
             return $"""
                 <!doctype html>
@@ -107,7 +131,7 @@ namespace Spectrum.API.Services.Email
                       <h2 style="margin:0 0 12px;color:#ffffff;">{WebUtility.HtmlEncode(title)}</h2>
                       <p style="line-height:1.5;color:#d8d8e2;">{WebUtility.HtmlEncode(intro)}</p>
                       <p style="font-size:28px;letter-spacing:6px;font-weight:700;color:#a987ff;margin:24px 0;">{WebUtility.HtmlEncode(code)}</p>
-                      <p style="line-height:1.5;color:#aaa;">Este código expira pronto. Si no solicitaste este correo, puedes ignorarlo.</p>
+                      <p style="line-height:1.5;color:#aaa;">{WebUtility.HtmlEncode(footer)}</p>
                     </div>
                   </div>
                 </body>

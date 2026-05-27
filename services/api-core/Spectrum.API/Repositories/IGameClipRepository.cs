@@ -43,9 +43,9 @@ namespace Spectrum.API.Repositories
         Task<GameClip?> GetClipByIdAsync(Guid clipId);
 
         /// <summary>
-        /// Prepares an existing game clip record to be removed from the persistence tracking system.
+        /// Marks an existing game clip record as deleted without physically removing it.
         /// </summary>
-        Task DeleteClipAsync(GameClip clip);
+        Task DeleteClipAsync(GameClip clip, Guid deletedByUserId);
 
         /// <summary>
         /// Persists all pending tracking changes asynchronously into the database backend.
@@ -105,9 +105,11 @@ namespace Spectrum.API.Repositories
         }
 
         /// <inheritdoc />
-        public async Task DeleteClipAsync(GameClip clip)
+        public async Task DeleteClipAsync(GameClip clip, Guid deletedByUserId)
         {
-            _context.GameClips.Remove(clip);
+            clip.IsDeleted = true;
+            clip.DeletedAt = DateTime.UtcNow;
+            clip.DeletedByUserId = deletedByUserId;
             await Task.CompletedTask;
         }
 

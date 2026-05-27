@@ -1,3 +1,7 @@
+using Spectrum.API.Services.Email;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Spectrum.API.Services.Drops
 {
     public interface IRewardDeliveryService
@@ -10,35 +14,38 @@ namespace Spectrum.API.Services.Drops
         );
     }
 
-    public class SafeLogRewardDeliveryService : IRewardDeliveryService
+    public class EmailRewardDeliveryService : IRewardDeliveryService
     {
-        private readonly ILogger<SafeLogRewardDeliveryService> _logger;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<EmailRewardDeliveryService> _logger;
 
-        public SafeLogRewardDeliveryService(ILogger<SafeLogRewardDeliveryService> logger)
+        public EmailRewardDeliveryService(IEmailService emailService, ILogger<EmailRewardDeliveryService> logger)
         {
+            _emailService = emailService;
             _logger = logger;
         }
 
-        public Task SendRewardAsync(
+        public async Task SendRewardAsync(
             string recipientEmail,
             string eventTitle,
             string rewardCode,
             CancellationToken cancellationToken = default
         )
         {
-            var recipientHash = Convert.ToHexString(
-                System.Security.Cryptography.SHA256.HashData(
-                    System.Text.Encoding.UTF8.GetBytes(recipientEmail.Trim().ToLowerInvariant())
-                )
-            )[..12];
+            await _emailService.SendRewardAsync(recipientEmail, eventTitle, rewardCode);
 
             _logger.LogInformation(
-                "Reward delivery queued for event {EventTitle} to recipient hash {RecipientHash}.",
+                "Reward email sent for event {EventTitle} to recipient hash {RecipientHash}.",
                 eventTitle,
-                recipientHash
+                HashRecipient(recipientEmail)
             );
+        }
 
-            return Task.CompletedTask;
+        private static string HashRecipient(string recipientEmail)
+        {
+            return Convert.ToHexString(SHA256.HashData(
+                Encoding.UTF8.GetBytes(recipientEmail.Trim().ToLowerInvariant())
+            ))[..12];
         }
     }
 }

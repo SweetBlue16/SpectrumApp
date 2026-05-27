@@ -64,7 +64,7 @@ namespace Spectrum.API.Services.Reviews
             CancellationToken cancellationToken = default
         )
         {
-            await GetExistingReviewAsync(reviewId, cancellationToken);
+            var review = await GetExistingReviewAsync(reviewId, cancellationToken);
 
             var content = NormalizeContent(dto.Content);
 
@@ -75,7 +75,8 @@ namespace Spectrum.API.Services.Reviews
                     {
                         UserId = userId.ToString(),
                         ReviewId = reviewId.ToString(),
-                        Content = content
+                        Content = content,
+                        GameId = review.GameId.ToString()
                     },
                     cancellationToken: cancellationToken
                 );

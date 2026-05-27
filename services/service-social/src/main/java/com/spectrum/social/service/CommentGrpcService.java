@@ -4,6 +4,9 @@ import com.spectrum.social.grpc.CommentServiceGrpc;
 import com.spectrum.social.grpc.PublishCommentRequest;
 import com.spectrum.social.grpc.CommentResponse;
 import com.spectrum.social.grpc.GetCommentsRequest;
+import com.spectrum.social.grpc.GetCommentCountsRequest;
+import com.spectrum.social.grpc.CommentCount;
+import com.spectrum.social.grpc.CommentCountsResponse;
 import com.spectrum.social.grpc.DeleteCommentRequest;
 import com.spectrum.social.grpc.DeleteResponse;
 import com.spectrum.social.model.Comment;
@@ -15,8 +18,12 @@ import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.query.Criteria;
 
 import java.time.Instant;
+import java.util.List;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -28,6 +35,7 @@ public class CommentGrpcService extends CommentServiceGrpc.CommentServiceImplBas
     private static final String ADMIN_ROLE = "ADMIN";
 
     private final CommentRepository commentRepository;
+    private final MongoTemplate mongoTemplate;
 
     @Override
     public void publishComment(PublishCommentRequest request, StreamObserver<CommentResponse> responseObserver) {
@@ -49,6 +57,7 @@ public class CommentGrpcService extends CommentServiceGrpc.CommentServiceImplBas
         Comment comment = Comment.builder()
                 .userId(request.getUserId())
                 .reviewId(request.getReviewId())
+                .gameId(request.getGameId())
                 .content(content)
                 .publishedAt(Instant.now())
                 .build();
@@ -76,6 +85,46 @@ public class CommentGrpcService extends CommentServiceGrpc.CommentServiceImplBas
                 .forEach(comment -> responseObserver.onNext(toResponse(comment)));
 
         log.info("Fetched comments for review {}, page {}", request.getReviewId(), request.getPage());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getCommentCounts(GetCommentCountsRequest request, StreamObserver<CommentCountsResponse> responseObserver) {
+        if (request.getReviewIdsCount() == 0) {
+            responseObserver.onNext(CommentCountsResponse.newBuilder().build());
+            responseObserver.onCompleted();
+            return;
+        }
+
+        Criteria criteria = Criteria.where("reviewId").in(request.getReviewIdsList());
+        if (request.getFrom() > 0 || request.getTo() > 0) {
+            Criteria publishedAtCriteria = Criteria.where("publishedAt");
+            if (request.getFrom() > 0) {
+                publishedAtCriteria = publishedAtCriteria.gte(Instant.ofEpochMilli(request.getFrom()));
+            }
+            if (request.getTo() > 0) {
+                publishedAtCriteria = publishedAtCriteria.lt(Instant.ofEpochMilli(request.getTo()));
+            }
+            criteria = new Criteria().andOperator(criteria, publishedAtCriteria);
+        }
+
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(criteria),
+                Aggregation.group("reviewId").count().as("count"),
+                Aggregation.project("count").and("_id").as("reviewId")
+        );
+
+        List<CommentCountDocument> documents = mongoTemplate
+                .aggregate(aggregation, "comments", CommentCountDocument.class)
+                .getMappedResults();
+
+        CommentCountsResponse.Builder response = CommentCountsResponse.newBuilder();
+        documents.forEach(document -> response.addCounts(CommentCount.newBuilder()
+                .setReviewId(document.getReviewId() == null ? "" : document.getReviewId())
+                .setCount(document.getCount())
+                .build()));
+
+        responseObserver.onNext(response.build());
         responseObserver.onCompleted();
     }
 
@@ -126,6 +175,28 @@ public class CommentGrpcService extends CommentServiceGrpc.CommentServiceImplBas
                 .setReviewId(comment.getReviewId())
                 .setContent(comment.getContent())
                 .setPublishedAt(comment.getPublishedAt() == null ? 0 : comment.getPublishedAt().toEpochMilli())
+                .setGameId(comment.getGameId() == null ? "" : comment.getGameId())
                 .build();
+    }
+
+    static class CommentCountDocument {
+        private String reviewId;
+        private int count;
+
+        public String getReviewId() {
+            return reviewId;
+        }
+
+        public void setReviewId(String reviewId) {
+            this.reviewId = reviewId;
+        }
+
+        public int getCount() {
+            return count;
+        }
+
+        public void setCount(int count) {
+            this.count = count;
+        }
     }
 }

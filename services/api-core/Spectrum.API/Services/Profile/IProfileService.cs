@@ -22,6 +22,8 @@ namespace Spectrum.API.Services.Profile
         /// <returns>A <see cref="UserProfileDto"/> containing the user's profile data.</returns>
         Task<UserProfileDto> GetUserProfileAsync(Guid userId);
 
+        Task<UserProfileDto> GetPublicUserProfileAsync(Guid userId);
+
         /// <summary>
         /// Updates the profile information for an existing user.
         /// </summary>
@@ -64,6 +66,8 @@ namespace Spectrum.API.Services.Profile
         /// <param name="userId">The unique identifier of the user.</param>
         /// <returns>The public URL of the newly uploaded profile picture.</returns>
         Task<string> UpdateAvatarAsync(Guid userId, IFormFile file);
+
+        Task BlockUserAsync(Guid blockerUserId, Guid blockedUserId, BlockUserDto dto);
     }
 
     /// <summary>
@@ -72,6 +76,7 @@ namespace Spectrum.API.Services.Profile
     public class ProfileService : IProfileService
     {
         private readonly IUserRepository _userRepository;
+        private readonly SpectrumDbContext _context;
         private readonly IImageStorageService _imageStorageService;
         private readonly IVerificationCodeService _verificationCodeService;
         private readonly IEmailService _emailService;
@@ -80,16 +85,19 @@ namespace Spectrum.API.Services.Profile
         /// Initializes a new instance of the <see cref="ProfileService"/> class.
         /// </summary>
         /// <param name="userRepository">The repository used to access user data.</param>
+        /// <param name="context">The application database context used for profile relationship writes.</param>
         /// <param name="imageStorageService">The service used for direct image uploads to AWS S3.</param>
         /// <param name="verificationCodeService">The service responsible for one-time verification codes.</param>
         /// <param name="emailService">The service responsible for transactional email delivery.</param>
         public ProfileService(
             IUserRepository userRepository,
+            SpectrumDbContext context,
             IImageStorageService imageStorageService,
             IVerificationCodeService verificationCodeService,
             IEmailService emailService)
         {
             _userRepository = userRepository;
+            _context = context;
             _imageStorageService = imageStorageService;
             _verificationCodeService = verificationCodeService;
             _emailService = emailService;
@@ -124,6 +132,13 @@ namespace Spectrum.API.Services.Profile
                     Name = p.Name
                 }).ToList()
             };
+        }
+
+        public async Task<UserProfileDto> GetPublicUserProfileAsync(Guid userId)
+        {
+            var profile = await GetUserProfileAsync(userId);
+            profile.Email = string.Empty;
+            return profile;
         }
 
         /// <inheritdoc />
@@ -229,6 +244,42 @@ namespace Spectrum.API.Services.Profile
             await _userRepository.UpdateUserAsync(user);
 
             return avatarUrl;
+        }
+
+        public async Task BlockUserAsync(Guid blockerUserId, Guid blockedUserId, BlockUserDto dto)
+        {
+            if (blockerUserId == blockedUserId)
+            {
+                throw new SpectrumBusinessException("cannotBlockSelf");
+            }
+
+            var blockedUser = await _userRepository.GetUserByIdAsync(blockedUserId);
+            if (blockedUser is null)
+            {
+                throw new SpectrumNotFoundException(Constants.ErrorMessages.UserNotFound);
+            }
+
+            var alreadyBlocked = await _context.UserBlocks
+                .AnyAsync(block => block.BlockerUserId == blockerUserId && block.BlockedUserId == blockedUserId);
+
+            if (alreadyBlocked)
+            {
+                return;
+            }
+
+            var reason = string.IsNullOrWhiteSpace(dto.Reason) ? null : dto.Reason.Trim();
+            if (reason?.Length > 200)
+            {
+                throw new SpectrumBusinessException("blockReasonTooLong");
+            }
+
+            await _context.UserBlocks.AddAsync(new UserBlock
+            {
+                BlockerUserId = blockerUserId,
+                BlockedUserId = blockedUserId,
+                Reason = reason
+            });
+            await _context.SaveChangesAsync();
         }
 
         private async Task<User> GetExistingUserAsync(Guid userId)

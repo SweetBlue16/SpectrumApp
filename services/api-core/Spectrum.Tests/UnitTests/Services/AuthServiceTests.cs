@@ -124,6 +124,34 @@ namespace Spectrum.Tests.UnitTests.Services
         }
 
         [Fact]
+        public async Task TestLoginAsyncWhenDemoAdminSeedCredentialsShouldReturnAdminAuthResponseDto()
+        {
+            var password = "DemoAdmin123!";
+            var loginDto = new LoginDto { Email = "admin@demo.spectrum.local", Password = password };
+            var existingUser = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = loginDto.Email,
+                Username = "DEMO_Admin",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                Role = Constants.Roles.Admin,
+                IsDeleted = false,
+                IsSuspended = false,
+                IsEmailVerified = true
+            };
+
+            _userRepositoryMock.Setup(r => r.GetUserByEmailAsync(loginDto.Email)).ReturnsAsync(existingUser);
+
+            var result = await _authService.LoginAsync(loginDto);
+
+            Assert.NotNull(result);
+            Assert.Equal("DEMO_Admin", result.Username);
+            Assert.Equal(loginDto.Email, result.Email);
+            Assert.Equal(Constants.Roles.Admin, result.Role);
+            Assert.False(string.IsNullOrWhiteSpace(result.Token));
+        }
+
+        [Fact]
         public async Task TestLoginAsyncWhenUserDoesNotExistShouldThrowSpectrumUnauthorizedException()
         {
             var loginDto = new LoginDto { Email = "ghost@test.com", Password = "Password123!" };

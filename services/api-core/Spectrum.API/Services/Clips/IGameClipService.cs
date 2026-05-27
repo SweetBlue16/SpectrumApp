@@ -28,7 +28,7 @@ namespace Spectrum.API.Services.Clips
         Task<IEnumerable<GameClipSummaryDto>> GetClipsByUserIdAsync(Guid userId);
 
         /// <summary>
-        /// Deletes a specific game clip from the database and removes its associated physical file from AWS S3.
+        /// Deletes a specific game clip from active queries using a soft-delete flag.
         /// </summary>
         Task DeleteClipAsync(Guid clipId, Guid userId);
     }
@@ -128,9 +128,7 @@ namespace Spectrum.API.Services.Clips
 
             await ValidateDeletionPermissionAsync(clip, userId);
 
-            await _videoStorageService.DeleteVideoAsync(clip.Url);
-
-            await _clipRepository.DeleteClipAsync(clip);
+            await _clipRepository.DeleteClipAsync(clip, userId);
             await _clipRepository.SaveChangesAsync();
         }
 
