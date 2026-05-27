@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Data
@@ -15,11 +16,30 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Event {
     @Id
     private String id;
+    private String title;
+    private String description;
+    private String imageUrl;
     private String gameTitle;
-    private String coverImageUrl;
+    private int rawgGameId;
+    private String platform;
     private int keysTotal;
     private int keysAvailable;
+    private int totalSlots;
+    private int availableSlots;
+    @Indexed
     private String status;
-    private long startDate;
-    private long endDate;
+    @Indexed
+    private long startAt;
+    private long joinDeadlineAt;
+    private long revealAt;
+    private long endAt;
+    private String publicChallengeCode;
+    private String createdByAdminId;
+    @Indexed
+    private String winnerUserId;
+    private String winnerUsername;
+    private Long finishedAt;
+    private Long rewardSentAt;
+    private String rewardDeliveryStatus;
+    private int participantsCount;
 }

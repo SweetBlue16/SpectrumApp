@@ -21,6 +21,7 @@ public class Report {
     private String targetId;
     private String targetType;
     private String reason;
+    private String description;
     private String status;
     private Instant reportedAt;
     private String moderatorId;

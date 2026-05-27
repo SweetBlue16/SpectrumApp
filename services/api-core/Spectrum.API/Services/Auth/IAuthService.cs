@@ -32,6 +32,8 @@ namespace Spectrum.API.Services.Auth
         /// <exception cref="SpectrumBusinessException">Thrown if any required personal detail is missing or if email/username is already taken.</exception>
         Task<AuthResponseDto> RegisterAdminAsync(RegisterAdminDto registerAdminDto);
 
+        Task<AuthResponseDto> RegisterAdminByAdminAsync(RegisterAdminDto registerAdminDto);
+
         /// <summary>
         /// Authenticates a user with the provided local login credentials and generates a JWT token upon successful authentication.
         /// </summary>
@@ -135,10 +137,23 @@ namespace Spectrum.API.Services.Auth
             await AuthUtilities.ValidateRegisterInput(registerAdminDto, _userRepository);
             await AuthUtilities.ValidateRegisterAdminInput(registerAdminDto, _adminDetailRepository, masterKey);
 
+            return await CreateAdminAsync(registerAdminDto);
+        }
+
+        public async Task<AuthResponseDto> RegisterAdminByAdminAsync(RegisterAdminDto registerAdminDto)
+        {
+            await AuthUtilities.ValidateRegisterInput(registerAdminDto, _userRepository);
+            await ValidateAdminProfileAsync(registerAdminDto);
+
+            return await CreateAdminAsync(registerAdminDto);
+        }
+
+        private async Task<AuthResponseDto> CreateAdminAsync(RegisterAdminDto registerAdminDto)
+        {
             var user = new User
             {
-                Username = registerAdminDto.Username,
-                Email = registerAdminDto.Email,
+                Username = registerAdminDto.Username.Trim(),
+                Email = NormalizeEmail(registerAdminDto.Email),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerAdminDto.Password),
                 CreatedAt = DateTime.UtcNow,
                 Role = Constants.Roles.Admin,
@@ -150,11 +165,11 @@ namespace Spectrum.API.Services.Auth
             {
                 Id = Guid.NewGuid(),
                 UserId = createdUser.Id,
-                FirstName = registerAdminDto.FirstName,
-                LastName = registerAdminDto.LastName,
-                PhoneNumber = registerAdminDto.PhoneNumber,
-                Address = registerAdminDto.Address,
-                Rfc = registerAdminDto.Rfc
+                FirstName = registerAdminDto.FirstName.Trim(),
+                LastName = registerAdminDto.LastName.Trim(),
+                PhoneNumber = registerAdminDto.PhoneNumber.Trim(),
+                Address = registerAdminDto.Address.Trim(),
+                Rfc = registerAdminDto.Rfc.Trim().ToUpperInvariant()
             };
             await _adminDetailRepository.AddAdminDetailAsync(adminDetail);
 
@@ -352,6 +367,23 @@ namespace Spectrum.API.Services.Auth
                 Email = user.Email,
                 Role = user.Role
             };
+        }
+
+        private async Task ValidateAdminProfileAsync(RegisterAdminDto registerAdminDto)
+        {
+            if (string.IsNullOrWhiteSpace(registerAdminDto.FirstName) ||
+                string.IsNullOrWhiteSpace(registerAdminDto.LastName) ||
+                string.IsNullOrWhiteSpace(registerAdminDto.PhoneNumber) ||
+                string.IsNullOrWhiteSpace(registerAdminDto.Address) ||
+                string.IsNullOrWhiteSpace(registerAdminDto.Rfc))
+            {
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
+            }
+
+            if (await _adminDetailRepository.RfcExistsAsync(registerAdminDto.Rfc))
+            {
+                throw new SpectrumBusinessException("rfcAlreadyRegistered");
+            }
         }
 
         private static string NormalizeEmail(string email)

@@ -6,5 +6,6 @@
         public string GameTitle { get; set; } = string.Empty;
         public string AccessKeyCode { get; set; } = string.Empty;
         public DateTime ClaimedAt { get; set; }
+        public string RewardDeliveryStatus { get; set; } = string.Empty;
     }
 }

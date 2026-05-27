@@ -37,6 +37,8 @@ namespace Spectrum.API.Repositories
         /// <param name="email">The email address linked to the administrator's base user account.</param>
         /// <returns>The matching <see cref="AdminDetail"/> entity, or null if no details are found.</returns>
         Task<AdminDetail?> GetAdminDetailByEmail(string email);
+
+        Task<bool> RfcExistsAsync(string rfc, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -73,6 +75,12 @@ namespace Spectrum.API.Repositories
         public async Task<AdminDetail?> GetAdminDetailByUserIdAsync(Guid userId)
         {
             return await _context.AdminDetails.FirstOrDefaultAsync(ad => ad.UserId == userId);
+        }
+
+        public async Task<bool> RfcExistsAsync(string rfc, CancellationToken cancellationToken = default)
+        {
+            var normalizedRfc = rfc.Trim().ToUpperInvariant();
+            return await _context.AdminDetails.AnyAsync(ad => ad.Rfc == normalizedRfc, cancellationToken);
         }
 
         /// <inheritdoc />

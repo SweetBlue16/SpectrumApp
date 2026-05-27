@@ -135,7 +135,11 @@ namespace Spectrum.Tests.UnitTests.Services
                 .Returns(CreateAsyncUnaryCall(expectedResponse));
 
             var exception = await Assert.ThrowsAsync<SpectrumNotFoundException>(() =>
-                _reportsService.UpdateReportStatusAsync("invalid-id", adminId, new UpdateReportStatusDto(), CancellationToken.None));
+                _reportsService.UpdateReportStatusAsync(
+                    "invalid-id",
+                    adminId,
+                    new UpdateReportStatusDto { NewStatus = "RESOLVED" },
+                    CancellationToken.None));
 
             Assert.Equal("Report not found.", exception.Message);
         }

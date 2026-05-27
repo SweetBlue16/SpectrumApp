@@ -73,6 +73,16 @@ namespace Spectrum.API.Data
                 .HasIndex(user => user.Email)
                 .IsUnique();
 
+            modelBuilder.Entity<User>()
+                .HasIndex(user => user.Username);
+
+            modelBuilder.Entity<User>()
+                .HasIndex(user => user.CreatedAt);
+
+            modelBuilder.Entity<AdminDetail>()
+                .HasIndex(adminDetail => adminDetail.Rfc)
+                .IsUnique();
+
             modelBuilder.Entity<Game>()
                 .HasIndex(game => game.RawgId)
                 .IsUnique();
@@ -113,6 +123,15 @@ namespace Spectrum.API.Data
             modelBuilder.Entity<Review>()
                 .Property(review => review.DislikesCount)
                 .HasColumnName("dislikes_count");
+
+            modelBuilder.Entity<Review>()
+                .HasIndex(review => new { review.GameId, review.CreatedAt });
+
+            modelBuilder.Entity<Review>()
+                .HasIndex(review => new { review.UserId, review.CreatedAt });
+
+            modelBuilder.Entity<Review>()
+                .HasIndex(review => new { review.MediaType, review.CreatedAt, review.LikesCount });
 
             modelBuilder.Entity<Platform>().HasData(
                 new Platform { Id = 1, Name = "PC" },
@@ -156,6 +175,9 @@ namespace Spectrum.API.Data
             modelBuilder.Entity<GameClip>()
                 .Property(gameClip => gameClip.Description)
                 .HasColumnName("description");
+
+            modelBuilder.Entity<GameClip>()
+                .HasIndex(gameClip => new { gameClip.UserId, gameClip.CreatedAt });
         }
     }
 }

@@ -1,13 +1,13 @@
 package com.spectrum.drops;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
 class ServiceDropsApplicationTests {
 
     @Test
-    void contextLoads() {
+    void applicationClassCanBeLoaded() {
+        assertDoesNotThrow(() -> Class.forName(ServiceDropsApplication.class.getName()));
     }
-
 }

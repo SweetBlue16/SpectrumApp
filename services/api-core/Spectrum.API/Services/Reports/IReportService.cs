@@ -36,13 +36,20 @@ namespace Spectrum.API.Services.Reports
                 {
                     reports.Add(new ReportDetailsDto
                     {
+                        Id = response.ReportId,
                         ReportId = response.ReportId,
                         ReporterId = Guid.Parse(response.ReporterId),
                         TargetId = Guid.Parse(response.TargetId),
                         TargetType = response.TargetType,
                         Reason = response.Reason,
                         Status = response.Status,
-                        ReportedAt = DateTimeOffset.FromUnixTimeMilliseconds(response.ReportedAt).UtcDateTime
+                        ReportedAt = DateTimeOffset.FromUnixTimeMilliseconds(response.ReportedAt).UtcDateTime,
+                        CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(response.ReportedAt).UtcDateTime,
+                        TargetContentSnippet = response.Description,
+                        AdminNotes = response.ResolutionNotes,
+                        ResolvedAt = response.ResolvedAt <= 0
+                            ? null
+                            : DateTimeOffset.FromUnixTimeMilliseconds(response.ResolvedAt).UtcDateTime
                     });
                 }
             }
@@ -63,7 +70,8 @@ namespace Spectrum.API.Services.Reports
                     ReporterId = reporterId.ToString(),
                     TargetId = dto.TargetId.ToString(),
                     TargetType = dto.TargetType,
-                    Reason = dto.Reason
+                    Reason = dto.Reason,
+                    Description = dto.Description ?? string.Empty
                 };
 
                 var response = await _reportServiceClient.SubmitReportAsync(request, cancellationToken: cancellationToken);
@@ -87,8 +95,8 @@ namespace Spectrum.API.Services.Reports
                 {
                     ReportId = reportId,
                     ModeratorId = moderatorId.ToString(),
-                    NewStatus = dto.NewStatus,
-                    ResolutionNotes = dto.ResolutionNotes ?? string.Empty
+                    NewStatus = ResolveStatus(dto),
+                    ResolutionNotes = ResolveNotes(dto)
                 };
 
                 var response = await _reportServiceClient.UpdateReportStatusAsync(request, cancellationToken: cancellationToken);
@@ -106,6 +114,24 @@ namespace Spectrum.API.Services.Reports
                 _logger.LogError(ex, "Failed to connect to Social gRPC service.");
                 throw new SpectrumServiceUnavailableException(Constants.ErrorMessages.RpcServiceUnavailable);
             }
+        }
+
+        private static string ResolveStatus(UpdateReportStatusDto dto)
+        {
+            var status = string.IsNullOrWhiteSpace(dto.NewStatus) ? dto.Status : dto.NewStatus;
+            if (status is not ("RESOLVED" or "DISMISSED"))
+            {
+                throw new SpectrumBusinessException("reportStatusInvalid");
+            }
+
+            return status;
+        }
+
+        private static string ResolveNotes(UpdateReportStatusDto dto)
+        {
+            return string.IsNullOrWhiteSpace(dto.ResolutionNotes)
+                ? dto.AdminNotes ?? string.Empty
+                : dto.ResolutionNotes;
         }
     }
 }

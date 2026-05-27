@@ -13,17 +13,27 @@ service DropService {
   rpc GetWonKeys (WonKeysRequest) returns (WonKeysResponse);
   rpc CreateEvent (CreateEventRequest) returns (EventActionResponse);
   rpc UpdateEvent (UpdateEventRequest) returns (EventActionResponse);
+  rpc ListEvents (ListEventsRequest) returns (EventListResponse);
+  rpc JoinEvent (JoinEventRequest) returns (EventActionResponse);
+  rpc PublishEvent (PublishEventRequest) returns (EventActionResponse);
+  rpc FinishEvent (FinishEventRequest) returns (EventActionResponse);
+  rpc MarkRewardSent (MarkRewardSentRequest) returns (EventActionResponse);
 }
 
 message ClaimKeyRequest {
   string user_id = 1;
   string event_id = 2;
+  string challenge_code = 3;
+  string username = 4;
 }
 
 message ClaimKeyResponse {
   bool success = 1;
   string access_key_code = 2;
   int64 claimed_at = 3;
+  string winner_user_id = 4;
+  string winner_username = 5;
+  string message = 6;
 }
 
 message GetEventRequest {
@@ -36,6 +46,25 @@ message EventStatusResponse {
   int32 keys_total = 3;
   string status = 4;
   int64 end_date = 5;
+  string title = 6;
+  string description = 7;
+  string image_url = 8;
+  string game_title = 9;
+  int32 rawg_game_id = 10;
+  string platform = 11;
+  int64 start_at = 12;
+  int64 join_deadline_at = 13;
+  int64 reveal_at = 14;
+  int32 total_slots = 15;
+  int32 available_slots = 16;
+  string public_challenge_code = 17;
+  string created_by_admin_id = 18;
+  string winner_user_id = 19;
+  string winner_username = 20;
+  int64 finished_at = 21;
+  int64 reward_sent_at = 22;
+  string reward_delivery_status = 23;
+  int32 participants_count = 24;
 }
 
 message WonKeysRequest {
@@ -51,21 +80,76 @@ message WonKey {
   string game_title = 2;
   string access_key_code = 3;
   int64 claimed_at = 4;
+  string reward_delivery_status = 5;
 }
 
 message CreateEventRequest {
-  string game_title = 1;
-  string cover_image_url = 2;
-  int64 end_date = 3;
-  repeated string access_keys = 4;
+  string title = 1;
+  string description = 2;
+  string image_url = 3;
+  string game_title = 4;
+  int32 rawg_game_id = 5;
+  string platform = 6;
+  int64 start_at = 7;
+  int64 join_deadline_at = 8;
+  int64 reveal_at = 9;
+  int64 end_at = 10;
+  int32 total_slots = 11;
+  string public_challenge_code = 12;
+  string created_by_admin_id = 13;
+  bool publish_now = 14;
+  repeated string access_keys = 15;
 }
 
 message UpdateEventRequest {
   string event_id = 1;
-  string game_title = 2;
-  string cover_image_url = 3;
-  int64 end_date = 4;
-  string status = 5;
+  string title = 2;
+  string description = 3;
+  string image_url = 4;
+  string game_title = 5;
+  int32 rawg_game_id = 6;
+  string platform = 7;
+  int64 start_at = 8;
+  int64 join_deadline_at = 9;
+  int64 reveal_at = 10;
+  int64 end_at = 11;
+  int32 total_slots = 12;
+  string public_challenge_code = 13;
+  string status = 14;
+}
+
+message ListEventsRequest {
+  string scope = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  bool include_drafts = 4;
+}
+
+message EventListResponse {
+  repeated EventStatusResponse events = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message JoinEventRequest {
+  string event_id = 1;
+  string user_id = 2;
+}
+
+message PublishEventRequest {
+  string event_id = 1;
+  bool publish_now = 2;
+}
+
+message FinishEventRequest {
+  string event_id = 1;
+  bool cancel_if_without_winner = 2;
+}
+
+message MarkRewardSentRequest {
+  string event_id = 1;
+  int64 reward_sent_at = 2;
 }
 
 message EventActionResponse {

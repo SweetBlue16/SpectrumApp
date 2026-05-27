@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Spectrum.API.Dtos.Drops;
+using Spectrum.API.Exceptions;
 using Spectrum.API.Services.Drops;
 using Spectrum.API.Utilities;
 using System.Security.Claims;
@@ -18,37 +20,69 @@ namespace Spectrum.API.Controllers
             _dropsService = dropsService;
         }
 
+        [HttpGet("events")]
+        public async Task<IActionResult> ListEvents(
+            [FromQuery] string scope = "CURRENT",
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            CancellationToken cancellationToken = default
+        )
+        {
+            var events = await _dropsService.ListEventsAsync(
+                scope,
+                page,
+                pageSize,
+                includeDrafts: false,
+                exposeChallengeCode: false,
+                cancellationToken
+            );
+            return Ok(events);
+        }
+
         [HttpGet("event/{eventId}")]
         public async Task<IActionResult> GetStatus(string eventId, CancellationToken cancellationToken)
         {
-            var status = await _dropsService.GetEventStatusAsync(eventId, cancellationToken);
+            var status = await _dropsService.GetEventStatusAsync(eventId, exposeChallengeCode: false, cancellationToken);
             return Ok(status);
         }
 
-        [HttpPost("claim/{eventId}")]
-        public async Task<IActionResult> Claim(string eventId, CancellationToken cancellationToken)
+        [HttpPost("event/{eventId}/join")]
+        public async Task<IActionResult> Join(string eventId, CancellationToken cancellationToken)
         {
-            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
+            var userId = GetCurrentUserId();
+            var result = await _dropsService.JoinEventAsync(userId, eventId, cancellationToken);
+            return Ok(result);
+        }
 
-            var result = await _dropsService.ClaimAccessKeyAsync(userId, eventId, cancellationToken);
-
-            if (result == null)
-            {
-                return BadRequest(new { Message = Constants.ErrorMessages.CouldNotClaimKey });
-            }
-
+        [HttpPost("claim/{eventId}")]
+        public async Task<IActionResult> Claim(
+            string eventId,
+            [FromBody] ClaimDropDto dto,
+            CancellationToken cancellationToken
+        )
+        {
+            var userId = GetCurrentUserId();
+            var result = await _dropsService.ClaimAccessKeyAsync(userId, eventId, dto, cancellationToken);
             return Ok(result);
         }
 
         [HttpGet("my-keys")]
         public async Task<IActionResult> GetMyKeys(CancellationToken ct)
         {
-            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!Guid.TryParse(userIdStr, out var userId)) return Unauthorized();
-
+            var userId = GetCurrentUserId();
             var keys = await _dropsService.GetUserWonKeysAsync(userId, ct);
             return Ok(keys);
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(userIdStr, out var userId))
+            {
+                throw new SpectrumUnauthorizedException(Constants.ErrorMessages.Unauthorized);
+            }
+
+            return userId;
         }
     }
 }

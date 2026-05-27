@@ -1,133 +1,406 @@
-﻿using Grpc.Core;
+using Grpc.Core;
 using Spectrum.API.Dtos.Drops;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Grpc.Drops;
+using Spectrum.API.Repositories;
 using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Services.Drops
 {
     public interface IDropsService
     {
-        Task CreateEventAsync(CreateDropEventDto dto, CancellationToken cancellationToken);
-        Task UpdateEventAsync(string eventId, UpdateDropEventDto dto, CancellationToken cancellationToken);
-        Task<WonKeyDto?> ClaimAccessKeyAsync(Guid userId, string eventId, CancellationToken cancellationToken);
-        Task<EventStatusDto> GetEventStatusAsync(string eventId, CancellationToken cancellationToken);
+        Task<DropActionResultDto> CreateEventAsync(CreateDropEventDto dto, Guid adminId, CancellationToken cancellationToken);
+        Task<DropActionResultDto> UpdateEventAsync(string eventId, UpdateDropEventDto dto, CancellationToken cancellationToken);
+        Task<DropActionResultDto> PublishEventAsync(string eventId, bool publishNow, CancellationToken cancellationToken);
+        Task<DropActionResultDto> FinishEventAsync(string eventId, bool cancelIfWithoutWinner, CancellationToken cancellationToken);
+        Task<DropActionResultDto> JoinEventAsync(Guid userId, string eventId, CancellationToken cancellationToken);
+        Task<ClaimDropResultDto> ClaimAccessKeyAsync(Guid userId, string eventId, ClaimDropDto dto, CancellationToken cancellationToken);
+        Task<EventStatusDto> GetEventStatusAsync(string eventId, bool exposeChallengeCode, CancellationToken cancellationToken);
+        Task<PagedResult<EventStatusDto>> ListEventsAsync(string scope, int page, int pageSize, bool includeDrafts, bool exposeChallengeCode, CancellationToken cancellationToken);
+        Task<DropActionResultDto> SendRewardAsync(Guid adminId, string eventId, SendRewardDto dto, CancellationToken cancellationToken);
         Task<IEnumerable<WonKeyDto>> GetUserWonKeysAsync(Guid userId, CancellationToken cancellationToken);
     }
 
     public class DropsService : IDropsService
     {
+        private const int MaximumChallengeLength = 50;
+        private const int MaximumRewardLength = 50;
+
         private readonly DropService.DropServiceClient _dropServiceClient;
+        private readonly IUserRepository _userRepository;
+        private readonly IRewardDeliveryService _rewardDeliveryService;
         private readonly ILogger<DropsService> _logger;
 
-        public DropsService(DropService.DropServiceClient dropServiceClient, ILogger<DropsService> logger)
+        public DropsService(
+            DropService.DropServiceClient dropServiceClient,
+            IUserRepository userRepository,
+            IRewardDeliveryService rewardDeliveryService,
+            ILogger<DropsService> logger
+        )
         {
             _dropServiceClient = dropServiceClient;
+            _userRepository = userRepository;
+            _rewardDeliveryService = rewardDeliveryService;
             _logger = logger;
         }
 
-        public async Task<WonKeyDto?> ClaimAccessKeyAsync(Guid userId, string eventId, CancellationToken cancellationToken)
+        public async Task<DropActionResultDto> CreateEventAsync(CreateDropEventDto dto, Guid adminId, CancellationToken cancellationToken)
         {
+            ValidateEvent(dto.Title, dto.GameTitle, dto.Platform, dto.StartAt, dto.JoinDeadlineAt, dto.RevealAt, dto.EndAt, dto.TotalSlots, dto.PublicChallengeCode);
+
+            var request = new CreateEventRequest
+            {
+                Title = dto.Title.Trim(),
+                Description = dto.Description.Trim(),
+                ImageUrl = dto.ImageUrl.Trim(),
+                GameTitle = dto.GameTitle.Trim(),
+                RawgGameId = dto.RawgGameId ?? 0,
+                Platform = dto.Platform.Trim(),
+                StartAt = ToUnixMilliseconds(dto.StartAt),
+                JoinDeadlineAt = ToUnixMilliseconds(dto.JoinDeadlineAt),
+                RevealAt = ToUnixMilliseconds(dto.RevealAt),
+                EndAt = ToUnixMilliseconds(dto.EndAt),
+                TotalSlots = dto.TotalSlots,
+                PublicChallengeCode = dto.PublicChallengeCode.Trim(),
+                CreatedByAdminId = adminId.ToString(),
+                PublishNow = dto.PublishNow
+            };
+
+            var response = await _dropServiceClient.CreateEventAsync(request, cancellationToken: cancellationToken);
+            return EnsureActionSuccess(response);
+        }
+
+        public async Task<DropActionResultDto> UpdateEventAsync(string eventId, UpdateDropEventDto dto, CancellationToken cancellationToken)
+        {
+            ValidateEvent(dto.Title, dto.GameTitle, dto.Platform, dto.StartAt, dto.JoinDeadlineAt, dto.RevealAt, dto.EndAt, dto.TotalSlots, dto.PublicChallengeCode);
+
+            var response = await _dropServiceClient.UpdateEventAsync(new UpdateEventRequest
+            {
+                EventId = eventId,
+                Title = dto.Title.Trim(),
+                Description = dto.Description.Trim(),
+                ImageUrl = dto.ImageUrl.Trim(),
+                GameTitle = dto.GameTitle.Trim(),
+                RawgGameId = dto.RawgGameId ?? 0,
+                Platform = dto.Platform.Trim(),
+                StartAt = ToUnixMilliseconds(dto.StartAt),
+                JoinDeadlineAt = ToUnixMilliseconds(dto.JoinDeadlineAt),
+                RevealAt = ToUnixMilliseconds(dto.RevealAt),
+                EndAt = ToUnixMilliseconds(dto.EndAt),
+                TotalSlots = dto.TotalSlots,
+                PublicChallengeCode = dto.PublicChallengeCode.Trim(),
+                Status = dto.Status.Trim()
+            }, cancellationToken: cancellationToken);
+
+            return EnsureActionSuccess(response);
+        }
+
+        public async Task<DropActionResultDto> PublishEventAsync(string eventId, bool publishNow, CancellationToken cancellationToken)
+        {
+            var response = await _dropServiceClient.PublishEventAsync(new PublishEventRequest
+            {
+                EventId = eventId,
+                PublishNow = publishNow
+            }, cancellationToken: cancellationToken);
+
+            return EnsureActionSuccess(response);
+        }
+
+        public async Task<DropActionResultDto> FinishEventAsync(string eventId, bool cancelIfWithoutWinner, CancellationToken cancellationToken)
+        {
+            var response = await _dropServiceClient.FinishEventAsync(new FinishEventRequest
+            {
+                EventId = eventId,
+                CancelIfWithoutWinner = cancelIfWithoutWinner
+            }, cancellationToken: cancellationToken);
+
+            return EnsureActionSuccess(response);
+        }
+
+        public async Task<DropActionResultDto> JoinEventAsync(Guid userId, string eventId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var response = await _dropServiceClient.JoinEventAsync(new JoinEventRequest
+                {
+                    EventId = eventId,
+                    UserId = userId.ToString()
+                }, cancellationToken: cancellationToken);
+
+                return EnsureActionSuccess(response);
+            }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "Error calling gRPC JoinEvent for event {EventId}", eventId);
+                throw new SpectrumServiceUnavailableException(Constants.ErrorMessages.RpcServiceUnavailable);
+            }
+        }
+
+        public async Task<ClaimDropResultDto> ClaimAccessKeyAsync(Guid userId, string eventId, ClaimDropDto dto, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(dto.ChallengeCode) || dto.ChallengeCode.Length > MaximumChallengeLength)
+            {
+                throw new SpectrumBusinessException("challengeCodeInvalid");
+            }
+
+            var user = await _userRepository.GetUserByIdAsync(userId)
+                ?? throw new SpectrumNotFoundException(Constants.ErrorMessages.UserNotFound);
+
             try
             {
                 var response = await _dropServiceClient.ClaimAccessKeyAsync(new ClaimKeyRequest
                 {
                     UserId = userId.ToString(),
-                    EventId = eventId
+                    EventId = eventId,
+                    ChallengeCode = dto.ChallengeCode.Trim(),
+                    Username = user.Username
                 }, cancellationToken: cancellationToken);
 
-                if (!response.Success) return null;
-
-                return new WonKeyDto
+                return new ClaimDropResultDto
                 {
+                    Success = response.Success,
                     EventId = eventId,
-                    AccessKeyCode = response.AccessKeyCode,
-                    ClaimedAt = DateTimeOffset.FromUnixTimeMilliseconds(response.ClaimedAt).UtcDateTime
+                    WinnerUserId = string.IsNullOrWhiteSpace(response.WinnerUserId) ? null : response.WinnerUserId,
+                    WinnerUsername = string.IsNullOrWhiteSpace(response.WinnerUsername) ? null : response.WinnerUsername,
+                    ClaimedAt = response.ClaimedAt <= 0 ? null : FromUnixMilliseconds(response.ClaimedAt),
+                    Message = response.Message
                 };
             }
             catch (RpcException ex)
             {
-                _logger.LogError(ex, "Error calling gRPC ClaimAccessKey");
+                _logger.LogError(ex, "Error calling gRPC ClaimAccessKey for event {EventId}", eventId);
                 throw new SpectrumServiceUnavailableException(Constants.ErrorMessages.RpcServiceUnavailable);
             }
         }
 
-        public async Task CreateEventAsync(CreateDropEventDto dto, CancellationToken cancellationToken)
-        {
-            var request = new CreateEventRequest
-            {
-                GameTitle = dto.GameTitle,
-                CoverImageUrl = dto.CoverImageUrl,
-                EndDate = new DateTimeOffset(dto.EndDate).ToUnixTimeMilliseconds()
-            };
-            request.AccessKeys.AddRange(dto.AccessKeys);
-
-            var response = await _dropServiceClient.CreateEventAsync(request, cancellationToken: cancellationToken);
-            if (!response.Success) throw new SpectrumBusinessException(response.Message);
-        }
-
-        public async Task<EventStatusDto> GetEventStatusAsync(string eventId, CancellationToken cancellationToken)
+        public async Task<EventStatusDto> GetEventStatusAsync(string eventId, bool exposeChallengeCode, CancellationToken cancellationToken)
         {
             try
             {
-                var response = await _dropServiceClient.GetEventStatusAsync(new GetEventRequest 
+                var response = await _dropServiceClient.GetEventStatusAsync(new GetEventRequest
                 {
                     EventId = eventId
                 }, cancellationToken: cancellationToken);
 
-                return new EventStatusDto
+                if (response.Status == "NOT_FOUND")
                 {
-                    EventId = response.EventId,
-                    KeysAvailable = response.KeysAvailable,
-                    KeysTotal = response.KeysTotal,
-                    Status = response.Status,
-                    EndDate = DateTimeOffset.FromUnixTimeMilliseconds(response.EndDate).UtcDateTime
+                    throw new SpectrumNotFoundException(Constants.ErrorMessages.ResourceNotFound);
+                }
+
+                return MapEvent(response, exposeChallengeCode);
+            }
+            catch (RpcException ex)
+            {
+                _logger.LogError(ex, "Error calling gRPC GetEventStatus for event {EventId}", eventId);
+                throw new SpectrumServiceUnavailableException(Constants.ErrorMessages.RpcServiceUnavailable);
+            }
+        }
+
+        public async Task<PagedResult<EventStatusDto>> ListEventsAsync(
+            string scope,
+            int page,
+            int pageSize,
+            bool includeDrafts,
+            bool exposeChallengeCode,
+            CancellationToken cancellationToken
+        )
+        {
+            var normalizedPage = Math.Max(1, page);
+            var normalizedPageSize = Math.Clamp(pageSize, 1, 50);
+
+            try
+            {
+                var response = await _dropServiceClient.ListEventsAsync(new ListEventsRequest
+                {
+                    Scope = scope.ToUpperInvariant(),
+                    Page = normalizedPage,
+                    PageSize = normalizedPageSize,
+                    IncludeDrafts = includeDrafts
+                }, cancellationToken: cancellationToken);
+
+                return new PagedResult<EventStatusDto>
+                {
+                    Items = response.Events.Select(item => MapEvent(item, exposeChallengeCode)).ToList(),
+                    TotalCount = response.TotalCount,
+                    Page = response.Page,
+                    PageSize = response.PageSize
                 };
             }
             catch (RpcException ex)
             {
-                _logger.LogError(ex, "Error calling gRPC GetEventStatus");
+                _logger.LogError(ex, "Error calling gRPC ListEvents for scope {Scope}", scope);
                 throw new SpectrumServiceUnavailableException(Constants.ErrorMessages.RpcServiceUnavailable);
             }
+        }
+
+        public async Task<DropActionResultDto> SendRewardAsync(Guid adminId, string eventId, SendRewardDto dto, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(dto.RewardCode) || dto.RewardCode.Length > MaximumRewardLength)
+            {
+                throw new SpectrumBusinessException("rewardCodeInvalid");
+            }
+
+            var eventStatus = await GetEventStatusAsync(eventId, exposeChallengeCode: true, cancellationToken);
+            if (!string.Equals(eventStatus.Status, "FINISHED", StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrWhiteSpace(eventStatus.WinnerUserId))
+            {
+                throw new SpectrumBusinessException("rewardRequiresFinishedWinner");
+            }
+
+            if (string.Equals(eventStatus.RewardDeliveryStatus, "SENT", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new SpectrumBusinessException("rewardAlreadySent");
+            }
+
+            if (!Guid.TryParse(eventStatus.WinnerUserId, out var winnerId))
+            {
+                throw new SpectrumBusinessException("winnerIdInvalid");
+            }
+
+            var winner = await _userRepository.GetUserByIdAsync(winnerId)
+                ?? throw new SpectrumNotFoundException(Constants.ErrorMessages.UserNotFound);
+
+            await _rewardDeliveryService.SendRewardAsync(
+                winner.Email,
+                eventStatus.Title,
+                dto.RewardCode,
+                cancellationToken
+            );
+
+            var sentAt = DateTime.UtcNow;
+            var response = await _dropServiceClient.MarkRewardSentAsync(new MarkRewardSentRequest
+            {
+                EventId = eventId,
+                RewardSentAt = ToUnixMilliseconds(sentAt)
+            }, cancellationToken: cancellationToken);
+
+            _logger.LogInformation(
+                "Admin {AdminId} marked reward as sent for event {EventId} and winner {WinnerId}.",
+                adminId,
+                eventId,
+                winnerId
+            );
+
+            return EnsureActionSuccess(response);
         }
 
         public async Task<IEnumerable<WonKeyDto>> GetUserWonKeysAsync(Guid userId, CancellationToken cancellationToken)
         {
             try
             {
-                var response = await _dropServiceClient.GetWonKeysAsync(new WonKeysRequest 
-                { 
-                    UserId = userId.ToString() 
+                var response = await _dropServiceClient.GetWonKeysAsync(new WonKeysRequest
+                {
+                    UserId = userId.ToString()
                 }, cancellationToken: cancellationToken);
 
                 return response.WonKeys.Select(k => new WonKeyDto
                 {
                     EventId = k.EventId,
                     GameTitle = k.GameTitle,
-                    AccessKeyCode = k.AccessKeyCode,
-                    ClaimedAt = DateTimeOffset.FromUnixTimeMilliseconds(k.ClaimedAt).UtcDateTime
+                    AccessKeyCode = string.Empty,
+                    ClaimedAt = k.ClaimedAt <= 0 ? DateTime.MinValue : FromUnixMilliseconds(k.ClaimedAt),
+                    RewardDeliveryStatus = k.RewardDeliveryStatus
                 });
             }
             catch (RpcException ex)
             {
-                _logger.LogError(ex, "Error calling gRPC GetWonKeys");
+                _logger.LogError(ex, "Error calling gRPC GetWonKeys for user {UserId}", userId);
                 return Enumerable.Empty<WonKeyDto>();
             }
         }
 
-        public async Task UpdateEventAsync(string eventId, UpdateDropEventDto dto, CancellationToken cancellationToken)
+        private static EventStatusDto MapEvent(EventStatusResponse response, bool exposeChallengeCode)
         {
-            var request = new UpdateEventRequest
-            {
-                EventId = eventId,
-                GameTitle = dto.GameTitle,
-                CoverImageUrl = dto.CoverImageUrl,
-                EndDate = new DateTimeOffset(dto.EndDate).ToUnixTimeMilliseconds(),
-                Status = dto.Status
-            };
+            var revealAt = FromUnixMilliseconds(response.RevealAt);
+            var shouldExposeChallenge = exposeChallengeCode || DateTime.UtcNow >= revealAt;
 
-            var response = await _dropServiceClient.UpdateEventAsync(request, cancellationToken: cancellationToken);
-            if (!response.Success) throw new SpectrumBusinessException(response.Message);
+            return new EventStatusDto
+            {
+                EventId = response.EventId,
+                Title = response.Title,
+                Description = response.Description,
+                ImageUrl = response.ImageUrl,
+                GameTitle = response.GameTitle,
+                RawgGameId = response.RawgGameId <= 0 ? null : response.RawgGameId,
+                Platform = response.Platform,
+                StartAt = FromUnixMilliseconds(response.StartAt),
+                JoinDeadlineAt = FromUnixMilliseconds(response.JoinDeadlineAt),
+                RevealAt = revealAt,
+                EndAt = FromUnixMilliseconds(response.EndDate),
+                TotalSlots = response.TotalSlots,
+                AvailableSlots = response.AvailableSlots,
+                Status = response.Status,
+                PublicChallengeCode = shouldExposeChallenge ? response.PublicChallengeCode : string.Empty,
+                CreatedByAdminId = response.CreatedByAdminId,
+                WinnerUserId = string.IsNullOrWhiteSpace(response.WinnerUserId) ? null : response.WinnerUserId,
+                WinnerUsername = string.IsNullOrWhiteSpace(response.WinnerUsername) ? null : response.WinnerUsername,
+                FinishedAt = response.FinishedAt <= 0 ? null : FromUnixMilliseconds(response.FinishedAt),
+                RewardSentAt = response.RewardSentAt <= 0 ? null : FromUnixMilliseconds(response.RewardSentAt),
+                RewardDeliveryStatus = string.IsNullOrWhiteSpace(response.RewardDeliveryStatus) ? "PENDING" : response.RewardDeliveryStatus,
+                ParticipantsCount = response.ParticipantsCount
+            };
+        }
+
+        private static DropActionResultDto EnsureActionSuccess(EventActionResponse response)
+        {
+            if (!response.Success)
+            {
+                throw new SpectrumBusinessException(response.Message);
+            }
+
+            return new DropActionResultDto
+            {
+                Success = response.Success,
+                EventId = response.EventId,
+                Message = response.Message
+            };
+        }
+
+        private static void ValidateEvent(
+            string title,
+            string gameTitle,
+            string platform,
+            DateTime startAt,
+            DateTime joinDeadlineAt,
+            DateTime revealAt,
+            DateTime endAt,
+            int totalSlots,
+            string publicChallengeCode
+        )
+        {
+            if (string.IsNullOrWhiteSpace(title) ||
+                string.IsNullOrWhiteSpace(gameTitle) ||
+                string.IsNullOrWhiteSpace(platform))
+            {
+                throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
+            }
+
+            if (totalSlots <= 0)
+            {
+                throw new SpectrumBusinessException("totalSlotsInvalid");
+            }
+
+            if (string.IsNullOrWhiteSpace(publicChallengeCode) || publicChallengeCode.Length > MaximumChallengeLength)
+            {
+                throw new SpectrumBusinessException("publicChallengeCodeInvalid");
+            }
+
+            if (!(startAt < joinDeadlineAt && joinDeadlineAt <= revealAt && revealAt < endAt))
+            {
+                throw new SpectrumBusinessException("eventDatesInvalid");
+            }
+        }
+
+        private static long ToUnixMilliseconds(DateTime value)
+        {
+            return new DateTimeOffset(value.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+                : value.ToUniversalTime()).ToUnixTimeMilliseconds();
+        }
+
+        private static DateTime FromUnixMilliseconds(long value)
+        {
+            return DateTimeOffset.FromUnixTimeMilliseconds(value).UtcDateTime;
         }
     }
 }

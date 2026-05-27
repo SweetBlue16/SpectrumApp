@@ -21,6 +21,9 @@ target/
 *.class
 .mvn/
 !/.mvn/wrapper/maven-wrapper.jar
+!services/service-drops/.mvn/
+!services/service-drops/.mvn/wrapper/
+!services/service-drops/.mvn/wrapper/maven-wrapper.properties
 
 # =========================
 # IDEs y SO

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using Spectrum.API.Controllers;
@@ -23,70 +23,84 @@ namespace Spectrum.Tests.UnitTests.Controllers
         }
 
         [Fact]
-        public async Task TestClaimWhenUserAuthenticatedShouldReturnOkWithWonKey()
+        public async Task ClaimWhenUserAuthenticatedShouldReturnOkWithClaimResult()
         {
             var userId = Guid.NewGuid();
             SetupControllerUser(_controller, userId);
 
             var eventId = "event-123";
-            var expectedKey = new WonKeyDto { EventId = eventId, AccessKeyCode = "STEAM-XYZ" };
+            var dto = new ClaimDropDto { ChallengeCode = "READY" };
+            var expectedResult = new ClaimDropResultDto
+            {
+                Success = true,
+                EventId = eventId,
+                WinnerUserId = userId.ToString(),
+                WinnerUsername = "neo"
+            };
 
             _dropServiceMock
-                .Setup(s => s.ClaimAccessKeyAsync(userId, eventId, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(expectedKey);
+                .Setup(service => service.ClaimAccessKeyAsync(userId, eventId, dto, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(expectedResult);
 
-            var result = await _controller.Claim(eventId, CancellationToken.None);
+            var result = await _controller.Claim(eventId, dto, CancellationToken.None);
 
             var okResult = Assert.IsType<OkObjectResult>(result);
-            var returnedKey = Assert.IsType<WonKeyDto>(okResult.Value);
-            Assert.Equal("STEAM-XYZ", returnedKey.AccessKeyCode);
+            var returned = Assert.IsType<ClaimDropResultDto>(okResult.Value);
+            Assert.True(returned.Success);
+            Assert.Equal("neo", returned.WinnerUsername);
         }
 
         [Fact]
-        public async Task TestClaimWhenServiceReturnsNullShouldReturnBadRequest()
+        public async Task JoinWhenUserAuthenticatedShouldReturnOk()
         {
             var userId = Guid.NewGuid();
             SetupControllerUser(_controller, userId);
 
             _dropServiceMock
-                .Setup(s => s.ClaimAccessKeyAsync(userId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync((WonKeyDto?)null);
+                .Setup(service => service.JoinEventAsync(userId, "event-123", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new DropActionResultDto { Success = true, EventId = "event-123" });
 
-            var result = await _controller.Claim("event-123", CancellationToken.None);
+            var result = await _controller.Join("event-123", CancellationToken.None);
 
-            var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-            Assert.NotNull(badRequest.Value);
+            Assert.IsType<OkObjectResult>(result);
         }
 
         [Fact]
-        public async Task TestCreateWhenCalledByAdminShouldReturnOk()
+        public async Task CreateWhenCalledByAdminShouldReturnCreated()
         {
             var adminId = Guid.NewGuid();
             SetupControllerUser(_adminController, adminId, Constants.Roles.Admin);
 
+            var now = DateTime.UtcNow;
             var dto = new CreateDropEventDto
             {
+                Title = "Halo launch",
                 GameTitle = "Halo",
-                EndDate = DateTime.UtcNow.AddDays(1),
-                AccessKeys = new List<string> { "KEY-1", "KEY-2" }
+                Platform = "PC",
+                StartAt = now.AddHours(1),
+                JoinDeadlineAt = now.AddHours(2),
+                RevealAt = now.AddHours(3),
+                EndAt = now.AddHours(4),
+                TotalSlots = 100,
+                PublicChallengeCode = "READY"
             };
 
             _dropServiceMock
-                .Setup(s => s.CreateEventAsync(dto, It.IsAny<CancellationToken>()))
-                .Returns(Task.CompletedTask);
+                .Setup(service => service.CreateEventAsync(dto, adminId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new DropActionResultDto { Success = true, EventId = "new-event" });
 
             var result = await _adminController.Create(dto, CancellationToken.None);
 
-            var okResult = Assert.IsType<OkObjectResult>(result);
-            _dropServiceMock.Verify(s => s.CreateEventAsync(dto, It.IsAny<CancellationToken>()), Times.Once);
+            Assert.IsType<CreatedAtActionResult>(result);
+            _dropServiceMock.Verify(service => service.CreateEventAsync(dto, adminId, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         private static void SetupControllerUser(ControllerBase controller, Guid userId, string role = "REVIEWER")
         {
             var user = new ClaimsPrincipal(new ClaimsIdentity(new Claim[]
             {
-                new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                new Claim(ClaimTypes.Role, role)
+                new(ClaimTypes.NameIdentifier, userId.ToString()),
+                new(ClaimTypes.Role, role)
             }, "mock"));
 
             controller.ControllerContext = new ControllerContext

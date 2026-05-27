@@ -69,6 +69,7 @@ message SubmitReportRequest {
   string target_id = 2;
   string target_type = 3;
   string reason = 4;
+  string description = 5;
 }
 
 message ListReportsRequest {
@@ -90,6 +91,10 @@ message ReportDetails {
   string reason = 5;
   string status = 6;
   int64 reported_at = 7;
+  string description = 8;
+  string moderator_id = 9;
+  string resolution_notes = 10;
+  int64 resolved_at = 11;
 }
 
 message ReportActionResponse {

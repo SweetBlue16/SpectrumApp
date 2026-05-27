@@ -1,15 +1,14 @@
 package com.spectrum.drops.service;
 
 import com.spectrum.drops.grpc.*;
-import com.spectrum.drops.model.AccessKey;
 import com.spectrum.drops.model.Event;
-import com.spectrum.drops.repository.AccessKeyRepository;
+import com.spectrum.drops.model.EventParticipant;
+import com.spectrum.drops.repository.EventParticipantRepository;
 import com.spectrum.drops.repository.EventRepository;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,12 +18,16 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.UpdateDefinition;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.mockito.ArgumentMatchers.eq;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,290 +37,221 @@ class DropsGrpcServiceTest {
     private EventRepository eventRepository;
 
     @Mock
-    private AccessKeyRepository accessKeyRepository;
+    private EventParticipantRepository participantRepository;
 
     @Mock
     private MongoTemplate mongoTemplate;
-
-    @Mock
-    private StreamObserver<ClaimKeyResponse> claimResponseObserver;
 
     @InjectMocks
     private DropsGrpcService dropsGrpcService;
 
     @BeforeEach
     void setUp() {
-        reset(eventRepository, accessKeyRepository, mongoTemplate, claimResponseObserver);
+        reset(eventRepository, participantRepository, mongoTemplate);
     }
 
     @Test
-    void claimAccessKeyWhenValidRequestAndKeysAvailableShouldReturnKey() {
-        ClaimKeyRequest request = ClaimKeyRequest.newBuilder()
-                .setUserId("user-123")
-                .setEventId("event-1")
-                .build();
+    void claimAccessKeyWhenChallengeMatchesShouldAssignSingleWinner() {
+        String eventId = "event-1";
+        String userId = "user-1";
+        when(participantRepository.existsByEventIdAndUserId(eventId, userId)).thenReturn(true);
 
-        Event activeEvent = new Event();
-        activeEvent.setId("event-1");
-        activeEvent.setStatus("ACTIVE");
-        activeEvent.setEndDate(Instant.now().toEpochMilli() + 100000);
-
-        when(eventRepository.findById("event-1")).thenReturn(Optional.of(activeEvent));
-        when(accessKeyRepository.existsByEventIdAndClaimedByUserId("event-1", "user-123")).thenReturn(false);
-
-        AccessKey wonKey = new AccessKey();
-        wonKey.setKeyCode("STEAM-WIN-123");
-        wonKey.setClaimedAt(Instant.now().toEpochMilli());
+        Event winner = activeEvent(eventId);
+        winner.setWinnerUserId(userId);
+        winner.setWinnerUsername("spectrum");
+        winner.setFinishedAt(Instant.now().toEpochMilli());
+        winner.setStatus("FINISHED");
 
         when(mongoTemplate.findAndModify(
                 any(Query.class),
                 any(UpdateDefinition.class),
                 any(FindAndModifyOptions.class),
-                eq(AccessKey.class)))
-                .thenReturn(wonKey);
+                eq(Event.class)))
+                .thenReturn(winner);
 
-        ArgumentCaptor<ClaimKeyResponse> responseCaptor = ArgumentCaptor.forClass(ClaimKeyResponse.class);
+        CapturingObserver<ClaimKeyResponse> observer = new CapturingObserver<>();
+        dropsGrpcService.claimAccessKey(ClaimKeyRequest.newBuilder()
+                .setEventId(eventId)
+                .setUserId(userId)
+                .setUsername("spectrum")
+                .setChallengeCode("READY")
+                .build(), observer);
 
-        dropsGrpcService.claimAccessKey(request, claimResponseObserver);
-
-        verify(claimResponseObserver).onNext(responseCaptor.capture());
-        assertTrue(responseCaptor.getValue().getSuccess());
-        assertEquals("STEAM-WIN-123", responseCaptor.getValue().getAccessKeyCode());
-        verify(claimResponseObserver).onCompleted();
+        assertTrue(observer.value.getSuccess());
+        assertEquals(userId, observer.value.getWinnerUserId());
+        assertTrue(observer.completed);
     }
 
     @Test
-    void claimAccessKeyWhenUserAlreadyClaimedShouldReturnError() {
-        ClaimKeyRequest request = ClaimKeyRequest.newBuilder()
-                .setUserId("user-123")
-                .setEventId("event-1")
-                .build();
+    void claimAccessKeyWhenHundredUsersRaceShouldReturnOnlyOneWinner() throws InterruptedException {
+        String eventId = "event-race";
+        AtomicBoolean winnerAssigned = new AtomicBoolean(false);
+        Queue<ClaimKeyResponse> responses = new ConcurrentLinkedQueue<>();
 
-        when(accessKeyRepository.existsByEventIdAndClaimedByUserId("event-1", "user-123")).thenReturn(true);
-
-        ArgumentCaptor<ClaimKeyResponse> responseCaptor = ArgumentCaptor.forClass(ClaimKeyResponse.class);
-
-        dropsGrpcService.claimAccessKey(request, claimResponseObserver);
-
-        verify(mongoTemplate, never()).findAndModify(
+        when(participantRepository.existsByEventIdAndUserId(eq(eventId), anyString())).thenReturn(true);
+        when(eventRepository.findById(eventId)).thenAnswer(invocation -> {
+            Event event = activeEvent(eventId);
+            event.setWinnerUserId("winner");
+            event.setWinnerUsername("winner-name");
+            event.setFinishedAt(Instant.now().toEpochMilli());
+            event.setStatus("FINISHED");
+            return Optional.of(event);
+        });
+        when(mongoTemplate.findAndModify(
                 any(Query.class),
                 any(UpdateDefinition.class),
                 any(FindAndModifyOptions.class),
-                any());
-        verify(claimResponseObserver).onNext(responseCaptor.capture());
-        assertFalse(responseCaptor.getValue().getSuccess());
+                eq(Event.class)))
+                .thenAnswer(invocation -> {
+                    if (!winnerAssigned.compareAndSet(false, true)) {
+                        return null;
+                    }
+
+                    Event event = activeEvent(eventId);
+                    event.setWinnerUserId("winner");
+                    event.setWinnerUsername("winner-name");
+                    event.setFinishedAt(Instant.now().toEpochMilli());
+                    event.setStatus("FINISHED");
+                    return event;
+                });
+
+        int attempts = 100;
+        CountDownLatch latch = new CountDownLatch(attempts);
+        var executor = Executors.newFixedThreadPool(20);
+        for (int index = 0; index < attempts; index++) {
+            int userNumber = index;
+            executor.submit(() -> {
+                dropsGrpcService.claimAccessKey(ClaimKeyRequest.newBuilder()
+                        .setEventId(eventId)
+                        .setUserId("user-" + userNumber)
+                        .setUsername("user-" + userNumber)
+                        .setChallengeCode("READY")
+                        .build(), new StreamObserver<>() {
+                    @Override
+                    public void onNext(ClaimKeyResponse value) {
+                        responses.add(value);
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                        latch.countDown();
+                    }
+
+                    @Override
+                    public void onCompleted() {
+                        latch.countDown();
+                    }
+                });
+            });
+        }
+
+        assertTrue(latch.await(10, TimeUnit.SECONDS));
+        executor.shutdownNow();
+
+        assertEquals(attempts, responses.size());
+        assertEquals(1, responses.stream().filter(ClaimKeyResponse::getSuccess).count());
     }
 
     @Test
-    void claimAccessKeyWhenKeysDepletedShouldReturnError() {
-        ClaimKeyRequest request = ClaimKeyRequest.newBuilder()
-                .setUserId("user-123")
-                .setEventId("event-1")
-                .build();
+    void joinEventWhenSlotAvailableShouldCreateParticipationAndDecrementInventory() {
+        String eventId = "event-join";
+        String userId = "user-1";
+        when(participantRepository.existsByEventIdAndUserId(eventId, userId)).thenReturn(false);
+        when(participantRepository.save(any(EventParticipant.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Event activeEvent = new Event();
-        activeEvent.setId("event-1");
-        activeEvent.setStatus("ACTIVE");
-        activeEvent.setEndDate(Instant.now().toEpochMilli() + 100000);
+        Event updated = activeEvent(eventId);
+        updated.setAvailableSlots(9);
+        updated.setParticipantsCount(1);
 
-        when(eventRepository.findById("event-1")).thenReturn(Optional.of(activeEvent));
-        when(accessKeyRepository.existsByEventIdAndClaimedByUserId(anyString(), anyString())).thenReturn(false);
+        when(mongoTemplate.findAndModify(
+                any(Query.class),
+                any(UpdateDefinition.class),
+                any(FindAndModifyOptions.class),
+                eq(Event.class)))
+                .thenReturn(updated);
 
-        when(mongoTemplate.findAndModify(any(Query.class), any(UpdateDefinition.class), any(FindAndModifyOptions.class), eq(AccessKey.class)))
-                .thenReturn(null);
+        CapturingObserver<EventActionResponse> observer = new CapturingObserver<>();
+        dropsGrpcService.joinEvent(JoinEventRequest.newBuilder()
+                .setEventId(eventId)
+                .setUserId(userId)
+                .build(), observer);
 
-        ArgumentCaptor<ClaimKeyResponse> responseCaptor = ArgumentCaptor.forClass(ClaimKeyResponse.class);
+        assertTrue(observer.value.getSuccess());
+        verify(participantRepository).save(any(EventParticipant.class));
+    }
 
-        dropsGrpcService.claimAccessKey(request, claimResponseObserver);
+    @Test
+    void createEventWhenDatesAreInvalidShouldReturnError() {
+        long now = Instant.now().toEpochMilli();
+        CapturingObserver<EventActionResponse> observer = new CapturingObserver<>();
 
-        verify(claimResponseObserver).onNext(responseCaptor.capture());
-        assertFalse(responseCaptor.getValue().getSuccess());
-        assertEquals("", responseCaptor.getValue().getAccessKeyCode());
+        dropsGrpcService.createEvent(CreateEventRequest.newBuilder()
+                .setTitle("Invalid")
+                .setGameTitle("Halo")
+                .setPlatform("PC")
+                .setStartAt(now + 2000)
+                .setJoinDeadlineAt(now + 1000)
+                .setRevealAt(now + 3000)
+                .setEndAt(now + 4000)
+                .setTotalSlots(10)
+                .setPublicChallengeCode("READY")
+                .build(), observer);
+
+        assertFalse(observer.value.getSuccess());
+        verify(eventRepository, never()).save(any());
     }
 
     @Test
     void getEventStatusWhenEventExistsShouldReturnDetails() {
-        GetEventRequest request = GetEventRequest.newBuilder()
-                .setEventId("event-123")
-                .build();
+        Event event = activeEvent("event-1");
+        when(eventRepository.findById("event-1")).thenReturn(Optional.of(event));
 
-        Event mockEvent = new Event();
-        mockEvent.setId("event-123");
-        mockEvent.setKeysAvailable(50);
-        mockEvent.setKeysTotal(100);
-        mockEvent.setStatus("ACTIVE");
-        mockEvent.setEndDate(1700000000L);
+        CapturingObserver<EventStatusResponse> observer = new CapturingObserver<>();
+        dropsGrpcService.getEventStatus(GetEventRequest.newBuilder().setEventId("event-1").build(), observer);
 
-        when(eventRepository.findById("event-123")).thenReturn(Optional.of(mockEvent));
-
-        StreamObserver<EventStatusResponse> statusObserver = mock(StreamObserver.class);
-        ArgumentCaptor<EventStatusResponse> responseCaptor = ArgumentCaptor.forClass(EventStatusResponse.class);
-
-        dropsGrpcService.getEventStatus(request, statusObserver);
-
-        verify(statusObserver).onNext(responseCaptor.capture());
-        EventStatusResponse response = responseCaptor.getValue();
-        assertEquals("ACTIVE", response.getStatus());
-        assertEquals(50, response.getKeysAvailable());
-        assertEquals(100, response.getKeysTotal());
-        verify(statusObserver).onCompleted();
+        assertEquals("event-1", observer.value.getEventId());
+        assertEquals("ACTIVE", observer.value.getStatus());
+        assertEquals(10, observer.value.getTotalSlots());
     }
 
-    @Test
-    void getEventStatusWhenEventNotFoundShouldReturnNotFoundStatus() {
-        GetEventRequest request = GetEventRequest.newBuilder().setEventId("unknown-event").build();
-        when(eventRepository.findById("unknown-event")).thenReturn(Optional.empty());
-
-        StreamObserver<EventStatusResponse> statusObserver = mock(StreamObserver.class);
-        ArgumentCaptor<EventStatusResponse> responseCaptor = ArgumentCaptor.forClass(EventStatusResponse.class);
-
-        dropsGrpcService.getEventStatus(request, statusObserver);
-
-        verify(statusObserver).onNext(responseCaptor.capture());
-        assertEquals("NOT_FOUND", responseCaptor.getValue().getStatus());
-        verify(statusObserver).onCompleted();
-    }
-
-    @Test
-    void getWonKeysWhenKeysExistShouldReturnKeysWithTitles() {
-        WonKeysRequest request = WonKeysRequest.newBuilder().setUserId("user-1").build();
-
-        AccessKey key = new AccessKey();
-        key.setEventId("event-1");
-        key.setKeyCode("STEAM-123");
-        key.setClaimedAt(1600000000L);
-
+    private static Event activeEvent(String eventId) {
+        long now = Instant.now().toEpochMilli();
         Event event = new Event();
-        event.setId("event-1");
-        event.setGameTitle("Halo 3");
-
-        when(accessKeyRepository.findByClaimedByUserId("user-1")).thenReturn(List.of(key));
-        when(eventRepository.findAllById(List.of("event-1"))).thenReturn(List.of(event));
-
-        StreamObserver<WonKeysResponse> wonKeysObserver = mock(StreamObserver.class);
-        ArgumentCaptor<WonKeysResponse> responseCaptor = ArgumentCaptor.forClass(WonKeysResponse.class);
-
-        dropsGrpcService.getWonKeys(request, wonKeysObserver);
-
-        verify(wonKeysObserver).onNext(responseCaptor.capture());
-        WonKeysResponse response = responseCaptor.getValue();
-        assertEquals(1, response.getWonKeysCount());
-        assertEquals("Halo 3", response.getWonKeys(0).getGameTitle());
-        assertEquals("STEAM-123", response.getWonKeys(0).getAccessKeyCode());
-        verify(wonKeysObserver).onCompleted();
+        event.setId(eventId);
+        event.setTitle("Launch Drop");
+        event.setDescription("Reward");
+        event.setGameTitle("Halo");
+        event.setPlatform("PC");
+        event.setImageUrl("https://example.test/halo.jpg");
+        event.setStatus("ACTIVE");
+        event.setStartAt(now - 1_000);
+        event.setJoinDeadlineAt(now + 10_000);
+        event.setRevealAt(now - 500);
+        event.setEndAt(now + 20_000);
+        event.setTotalSlots(10);
+        event.setAvailableSlots(10);
+        event.setPublicChallengeCode("READY");
+        event.setRewardDeliveryStatus("PENDING");
+        return event;
     }
 
-    @Test
-    void getWonKeysWhenUserIdIsBlankShouldReturnDefaultInstance() {
-        WonKeysRequest request = WonKeysRequest.newBuilder().setUserId("").build();
-        StreamObserver<WonKeysResponse> wonKeysObserver = mock(StreamObserver.class);
-        ArgumentCaptor<WonKeysResponse> responseCaptor = ArgumentCaptor.forClass(WonKeysResponse.class);
+    private static class CapturingObserver<T> implements StreamObserver<T> {
+        private T value;
+        private boolean completed;
 
-        dropsGrpcService.getWonKeys(request, wonKeysObserver);
+        @Override
+        public void onNext(T value) {
+            this.value = value;
+        }
 
-        verify(accessKeyRepository, never()).findByClaimedByUserId(anyString());
-        verify(wonKeysObserver).onNext(responseCaptor.capture());
-        assertEquals(0, responseCaptor.getValue().getWonKeysCount());
-        verify(wonKeysObserver).onCompleted();
-    }
+        @Override
+        public void onError(Throwable throwable) {
+            fail(throwable);
+        }
 
-    @Test
-    void createEventWhenValidRequestShouldSaveEventAndKeysAndReturnsSuccess() {
-        CreateEventRequest request = CreateEventRequest.newBuilder()
-                .setGameTitle("Gears of War")
-                .setCoverImageUrl("url")
-                .setEndDate(1800000000L)
-                .addAccessKeys("KEY1")
-                .addAccessKeys("KEY2")
-                .build();
-
-        Event savedEvent = new Event();
-        savedEvent.setId("new-event-id");
-        savedEvent.setKeysTotal(2);
-
-        when(eventRepository.save(any(Event.class))).thenReturn(savedEvent);
-
-        StreamObserver<EventActionResponse> createObserver = mock(StreamObserver.class);
-        ArgumentCaptor<EventActionResponse> responseCaptor = ArgumentCaptor.forClass(EventActionResponse.class);
-
-        dropsGrpcService.createEvent(request, createObserver);
-
-        verify(eventRepository).save(any(Event.class));
-        verify(accessKeyRepository).saveAll(anyList());
-
-        verify(createObserver).onNext(responseCaptor.capture());
-        assertTrue(responseCaptor.getValue().getSuccess());
-        assertEquals("new-event-id", responseCaptor.getValue().getEventId());
-        verify(createObserver).onCompleted();
-    }
-
-    @Test
-    void createEventWhenNoKeysProvidedShouldReturnError() {
-        CreateEventRequest request = CreateEventRequest.newBuilder()
-                .setGameTitle("Empty Event")
-                .build();
-
-        StreamObserver<EventActionResponse> createObserver = mock(StreamObserver.class);
-        ArgumentCaptor<EventActionResponse> responseCaptor = ArgumentCaptor.forClass(EventActionResponse.class);
-
-        dropsGrpcService.createEvent(request, createObserver);
-
-        verify(eventRepository, never()).save(any());
-        verify(createObserver).onNext(responseCaptor.capture());
-        assertFalse(responseCaptor.getValue().getSuccess());
-        assertTrue(responseCaptor.getValue().getMessage().contains("required"));
-        verify(createObserver).onCompleted();
-    }
-
-    @Test
-    void updateEventWhenEventExistsShouldUpdateAndReturnSuccess() {
-        UpdateEventRequest request = UpdateEventRequest.newBuilder()
-                .setEventId("event-1")
-                .setGameTitle("Updated Title")
-                .setCoverImageUrl("new-url")
-                .setEndDate(1900000000L)
-                .setStatus("INACTIVE")
-                .build();
-
-        Event existingEvent = new Event();
-        existingEvent.setId("event-1");
-
-        when(eventRepository.findById("event-1")).thenReturn(Optional.of(existingEvent));
-
-        StreamObserver<EventActionResponse> updateObserver = mock(StreamObserver.class);
-        ArgumentCaptor<EventActionResponse> responseCaptor = ArgumentCaptor.forClass(EventActionResponse.class);
-
-        dropsGrpcService.updateEvent(request, updateObserver);
-
-        ArgumentCaptor<Event> eventCaptor = ArgumentCaptor.forClass(Event.class);
-        verify(eventRepository).save(eventCaptor.capture());
-
-        Event savedEvent = eventCaptor.getValue();
-        assertEquals("Updated Title", savedEvent.getGameTitle());
-        assertEquals("INACTIVE", savedEvent.getStatus());
-
-        verify(updateObserver).onNext(responseCaptor.capture());
-        assertTrue(responseCaptor.getValue().getSuccess());
-        verify(updateObserver).onCompleted();
-    }
-
-    @Test
-    void updateEventWhenEventNotFoundShouldReturnError() {
-        UpdateEventRequest request = UpdateEventRequest.newBuilder()
-                .setEventId("unknown-event")
-                .build();
-
-        when(eventRepository.findById("unknown-event")).thenReturn(Optional.empty());
-
-        StreamObserver<EventActionResponse> updateObserver = mock(StreamObserver.class);
-        ArgumentCaptor<EventActionResponse> responseCaptor = ArgumentCaptor.forClass(EventActionResponse.class);
-
-        dropsGrpcService.updateEvent(request, updateObserver);
-
-        verify(eventRepository, never()).save(any());
-        verify(updateObserver).onNext(responseCaptor.capture());
-        assertFalse(responseCaptor.getValue().getSuccess());
-        assertEquals("Event not found.", responseCaptor.getValue().getMessage());
-        verify(updateObserver).onCompleted();
+        @Override
+        public void onCompleted() {
+            completed = true;
+        }
     }
 }

@@ -147,6 +147,11 @@ namespace Spectrum.API.Utilities
             {
                 throw new SpectrumBusinessException(Constants.ErrorMessages.MissingRequiredParameter);
             }
+
+            if (await adminDetailRepository.RfcExistsAsync(registerAdminDto.Rfc))
+            {
+                throw new SpectrumBusinessException("rfcAlreadyRegistered");
+            }
         }
     }
 }

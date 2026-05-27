@@ -73,8 +73,8 @@ namespace Spectrum.API.Services.Profile
 
         public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
         {
-            var user = _userRepository.GetUserByIdAsync(userId).Result;
-            if (user == null || user.IsSuspended)
+            var user = await _userRepository.GetUserByIdAsync(userId);
+            if (user == null || user.IsDeleted)
             {
                 throw new SpectrumNotFoundException(Constants.ErrorMessages.UserNotFound);
             }

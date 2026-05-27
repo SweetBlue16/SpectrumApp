@@ -44,6 +44,7 @@ public class ReportGrpcService extends ReportServiceGrpc.ReportServiceImplBase {
             report.setTargetId(request.getTargetId());
             report.setTargetType(request.getTargetType());
             report.setReason(request.getReason());
+            report.setDescription(request.getDescription());
             report.setStatus("PENDING");
             report.setReportedAt(Instant.now());
 
@@ -87,6 +88,10 @@ public class ReportGrpcService extends ReportServiceGrpc.ReportServiceImplBase {
                         .setReason(report.getReason())
                         .setStatus(report.getStatus())
                         .setReportedAt(report.getReportedAt().toEpochMilli())
+                        .setDescription(report.getDescription() == null ? "" : report.getDescription())
+                        .setModeratorId(report.getModeratorId() == null ? "" : report.getModeratorId())
+                        .setResolutionNotes(report.getResolutionNotes() == null ? "" : report.getResolutionNotes())
+                        .setResolvedAt(report.getResolvedAt())
                         .build();
                 responseObserver.onNext(details);
             }
@@ -115,6 +120,7 @@ public class ReportGrpcService extends ReportServiceGrpc.ReportServiceImplBase {
                 report.setStatus(request.getNewStatus());
                 report.setModeratorId(request.getModeratorId());
                 report.setResolutionNotes(request.getResolutionNotes());
+                report.setResolvedAt(Instant.now().toEpochMilli());
 
                 reportRepository.save(report);
 
@@ -154,8 +160,11 @@ public class ReportGrpcService extends ReportServiceGrpc.ReportServiceImplBase {
         if (request.getReporterId().isBlank() || request.getTargetId().isBlank() || request.getReason().isBlank()) {
             throw new IllegalArgumentException("Missing required fields. ReporterId, TargetId, and Reason are mandatory.");
         }
-        if (!request.getTargetType().equals("REVIEW") && !request.getTargetType().equals("COMMENT")) {
-            throw new IllegalArgumentException("Invalid TargetType. Must be REVIEW or COMMENT.");
+        if (!request.getTargetType().equals("REVIEW")
+                && !request.getTargetType().equals("COMMENT")
+                && !request.getTargetType().equals("USER")
+                && !request.getTargetType().equals("GAME_CLIP")) {
+            throw new IllegalArgumentException("Invalid TargetType.");
         }
     }
 
