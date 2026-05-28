@@ -14,6 +14,7 @@ namespace Spectrum.API.Dtos.Drops
         public required DateTime EndAt { get; set; }
         public int TotalSlots { get; set; }
         public string PublicChallengeCode { get; set; } = string.Empty;
+        public List<string> AccessKeys { get; set; } = new();
         public string Status { get; set; } = string.Empty;
     }
 }

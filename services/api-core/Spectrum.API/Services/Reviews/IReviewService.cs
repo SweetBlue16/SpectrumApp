@@ -2,6 +2,7 @@ using Spectrum.API.Dtos.Reviews;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Models;
 using Spectrum.API.Repositories;
+using Spectrum.API.Services.Email;
 
 namespace Spectrum.API.Services.Reviews
 {
@@ -65,10 +66,20 @@ namespace Spectrum.API.Services.Reviews
         };
 
         private readonly IReviewRepository _reviewRepository;
+        private readonly IGameRepository? _gameRepository;
+        private readonly IEmailService? _emailService;
+        private readonly ILogger<ReviewService>? _logger;
 
-        public ReviewService(IReviewRepository reviewRepository)
+        public ReviewService(
+            IReviewRepository reviewRepository,
+            IGameRepository? gameRepository = null,
+            IEmailService? emailService = null,
+            ILogger<ReviewService>? logger = null)
         {
             _reviewRepository = reviewRepository;
+            _gameRepository = gameRepository;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<ReviewResponseDto> CreateAsync(
@@ -196,6 +207,23 @@ namespace Spectrum.API.Services.Reviews
             await _reviewRepository.SaveChangesAsync(cancellationToken);
         }
 
+        private async Task TrySendReviewDeletedEmailAsync(Review review, CancellationToken cancellationToken)
+        {
+            if (_emailService is null || string.IsNullOrWhiteSpace(review.User?.Email))
+            {
+                return;
+            }
+
+            try
+            {
+                await _emailService.SendReviewDeletedAsync(review.User.Email, review.Title);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                _logger?.LogWarning(ex, "Could not send review deletion email for review {ReviewId}", review.Id);
+            }
+        }
+
         public async Task DeleteAsync(
             Guid reviewId,
             Guid userId,
@@ -210,6 +238,10 @@ namespace Spectrum.API.Services.Reviews
             review.UpdatedAt = DateTime.UtcNow;
 
             await _reviewRepository.SaveChangesAsync(cancellationToken);
+            if (isAdmin)
+            {
+                await TrySendReviewDeletedEmailAsync(review, cancellationToken);
+            }
         }
 
         private async Task<Review> GetExistingReviewAsync(Guid reviewId, CancellationToken cancellationToken)
@@ -240,11 +272,12 @@ namespace Spectrum.API.Services.Reviews
             }
         }
 
-        private static ReviewResponseDto MapToResponseDto(Review review, Guid? currentUserId, bool isAdmin = false)
+        private ReviewResponseDto MapToResponseDto(Review review, Guid? currentUserId, bool isAdmin = false)
         {
             var profilePicture = review.User?.ProfilePicture ?? string.Empty;
             var isOwnReview = currentUserId.HasValue && review.UserId == currentUserId.Value;
             var username = review.User?.Username ?? "Usuario Spectrum";
+            var game = _gameRepository?.GetById(review.GameId);
 
             return new ReviewResponseDto
             {
@@ -254,8 +287,8 @@ namespace Spectrum.API.Services.Reviews
                 UserProfileImageUrl = profilePicture,
                 ProfilePicture = profilePicture,
                 GameId = review.GameId,
-                GameTitle = string.Empty,
-                GameCoverUrl = string.Empty,
+                GameTitle = game?.Title ?? string.Empty,
+                GameCoverUrl = game?.CoverImageUrl ?? string.Empty,
                 Rating = review.Rating,
                 Title = review.Title,
                 Content = review.Content,

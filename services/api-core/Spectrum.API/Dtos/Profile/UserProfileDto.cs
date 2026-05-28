@@ -13,6 +13,7 @@ namespace Spectrum.API.Dtos.Profile
         /// The authenticated user's public display name.
         /// </summary>
         [Required]
+        [StringLength(50, MinimumLength = 3)]
         public string Username { get; set; } = string.Empty;
 
         /// <summary>

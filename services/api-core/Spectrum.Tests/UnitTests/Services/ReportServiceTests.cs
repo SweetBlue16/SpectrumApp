@@ -144,6 +144,34 @@ namespace Spectrum.Tests.UnitTests.Services
             Assert.Equal("Report not found.", exception.Message);
         }
 
+        [Fact]
+        public async Task TestGetReportsByStatusAsyncWhenIdsAreMongoObjectIdsShouldNotParseAsGuid()
+        {
+            var response = new ReportDetails
+            {
+                ReportId = "665f2f4fd7f2aa6f783b8123",
+                ReporterId = "665f2f4fd7f2aa6f783b8124",
+                TargetId = "665f2f4fd7f2aa6f783b8125",
+                TargetType = "COMMENT",
+                Reason = "SPAM",
+                Status = "PENDING",
+                ReportedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                Description = "Demo report"
+            };
+
+            _grpcClientMock
+                .Setup(c => c.ListReportsByStatus(
+                    It.Is<ListReportsRequest>(request => request.Status == "PENDING"),
+                    null, null, It.IsAny<CancellationToken>()))
+                .Returns(CreateAsyncServerStreamingCall(response));
+
+            var result = (await _reportsService.GetReportsByStatusAsync("PENDING", CancellationToken.None)).Single();
+
+            Assert.Equal(response.ReportId, result.ReportId);
+            Assert.Equal(response.ReporterId, result.ReporterId);
+            Assert.Equal(response.TargetId, result.TargetId);
+        }
+
         private static AsyncUnaryCall<TResponse> CreateAsyncUnaryCall<TResponse>(TResponse response)
         {
             return new AsyncUnaryCall<TResponse>(
@@ -152,6 +180,41 @@ namespace Spectrum.Tests.UnitTests.Services
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
                 () => { });
+        }
+
+        private static AsyncServerStreamingCall<TResponse> CreateAsyncServerStreamingCall<TResponse>(params TResponse[] responses)
+        {
+            return new AsyncServerStreamingCall<TResponse>(
+                new TestAsyncStreamReader<TResponse>(responses),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => { });
+        }
+
+        private sealed class TestAsyncStreamReader<T> : IAsyncStreamReader<T>
+        {
+            private readonly IReadOnlyList<T> _responses;
+            private int _index = -1;
+
+            public TestAsyncStreamReader(IReadOnlyList<T> responses)
+            {
+                _responses = responses;
+            }
+
+            public T Current { get; private set; } = default!;
+
+            public Task<bool> MoveNext(CancellationToken cancellationToken)
+            {
+                _index++;
+                if (_index >= _responses.Count)
+                {
+                    return Task.FromResult(false);
+                }
+
+                Current = _responses[_index];
+                return Task.FromResult(true);
+            }
         }
     }
 }

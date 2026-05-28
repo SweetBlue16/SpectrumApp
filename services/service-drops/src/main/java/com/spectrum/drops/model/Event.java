@@ -5,14 +5,24 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "events")
+@CompoundIndexes({
+        @CompoundIndex(name = "ix_status_reveal_end", def = "{'status': 1, 'revealAt': 1, 'endAt': 1}"),
+        @CompoundIndex(name = "ix_winners_user", def = "{'winners.userId': 1}"),
+        @CompoundIndex(name = "ix_reward_claim_user", def = "{'rewardCodes.claimedByUserId': 1}")
+})
 public class Event {
     @Id
     private String id;
@@ -42,4 +52,8 @@ public class Event {
     private Long rewardSentAt;
     private String rewardDeliveryStatus;
     private int participantsCount;
+    @Builder.Default
+    private List<RewardCode> rewardCodes = new ArrayList<>();
+    @Builder.Default
+    private List<Winner> winners = new ArrayList<>();
 }

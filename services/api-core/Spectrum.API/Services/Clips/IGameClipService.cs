@@ -2,6 +2,7 @@ using Spectrum.API.Dtos.Media;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Models;
 using Spectrum.API.Repositories;
+using Spectrum.API.Services.Email;
 using Spectrum.API.Services.Storage;
 using Spectrum.API.Utilities;
 
@@ -43,6 +44,8 @@ namespace Spectrum.API.Services.Clips
         private readonly IUserRepository _userRepository;
         private readonly IVideoStorageService _videoStorageService;
         private readonly IGameRepository _gameRepository;
+        private readonly IEmailService? _emailService;
+        private readonly ILogger<GameClipService>? _logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GameClipService"/> class.
@@ -51,21 +54,39 @@ namespace Spectrum.API.Services.Clips
         /// <param name="userRepository">The repository abstracted for user records and authorization lookups.</param>
         /// <param name="videoStorageService">The core service handling file lifecycles in cloud object storage.</param>
         /// <param name="gameRepository">The central memory repository acting as the snapshot catalog cache.</param>
+        /// <param name="emailService">Optional transactional email service used for moderation notices.</param>
+        /// <param name="logger">Optional structured logger used when non-blocking notifications fail.</param>
         public GameClipService(
             IGameClipRepository clipRepository,
             IUserRepository userRepository,
             IVideoStorageService videoStorageService,
-            IGameRepository gameRepository)
+            IGameRepository gameRepository,
+            IEmailService? emailService = null,
+            ILogger<GameClipService>? logger = null)
         {
             _clipRepository = clipRepository;
             _userRepository = userRepository;
             _videoStorageService = videoStorageService;
             _gameRepository = gameRepository;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         /// <inheritdoc />
         public async Task CreateClipAsync(Guid userId, CompleteUploadRequestDto request, string videoUrl)
         {
+            var title = request.Title.Trim();
+            var description = request.Description?.Trim() ?? string.Empty;
+            if (title.Length is < 3 or > 100)
+            {
+                throw new SpectrumBusinessException("El título del clip debe tener entre 3 y 100 caracteres.");
+            }
+
+            if (description.Length > 500)
+            {
+                throw new SpectrumBusinessException("La descripción del clip no puede exceder 500 caracteres.");
+            }
+
             Guid stableGameGuid = Spectrum.API.Utilities.GameMappingUtilities.GenerateDeterministicGuid(request.GameId);
 
             var gameExists = await _clipRepository.GameExistsAsync(stableGameGuid);
@@ -88,8 +109,8 @@ namespace Spectrum.API.Services.Clips
             {
                 UserId = userId,
                 GameId = stableGameGuid,
-                Title = request.Title,
-                Description = request.Description ?? string.Empty,
+                Title = title,
+                Description = description,
                 Url = videoUrl,
                 CreatedAt = DateTime.UtcNow
             };
@@ -107,7 +128,7 @@ namespace Spectrum.API.Services.Clips
             {
                 Id = c.Id,
                 Title = c.Title,
-                ThumbnailUrl = null,
+                ThumbnailUrl = c.Game?.CoverImageUrl,
                 GameName = c.Game?.Title,
                 Url = c.Url,
                 LikesCount = 0,
@@ -126,20 +147,24 @@ namespace Spectrum.API.Services.Clips
                 throw new SpectrumNotFoundException("The requested clip was not found.");
             }
 
-            await ValidateDeletionPermissionAsync(clip, userId);
+            var isAdminDelete = await ValidateDeletionPermissionAsync(clip, userId);
 
             await _clipRepository.DeleteClipAsync(clip, userId);
             await _clipRepository.SaveChangesAsync();
+            if (isAdminDelete)
+            {
+                await TrySendClipDeletedEmailAsync(clip);
+            }
         }
 
         /// <summary>
         /// Evaluates identity and security constraints to determine if a removal operation can take place.
         /// </summary>
-        private async Task ValidateDeletionPermissionAsync(GameClip clip, Guid userId)
+        private async Task<bool> ValidateDeletionPermissionAsync(GameClip clip, Guid userId)
         {
             if (clip.UserId == userId)
             {
-                return;
+                return false;
             }
 
             var requestingUser = await _userRepository.GetUserByIdAsync(userId);
@@ -147,6 +172,25 @@ namespace Spectrum.API.Services.Clips
             if (requestingUser?.Role != Constants.Roles.Admin)
             {
                 throw new SpectrumForbiddenException("You do not have permission to delete this clip.");
+            }
+
+            return true;
+        }
+
+        private async Task TrySendClipDeletedEmailAsync(GameClip clip)
+        {
+            if (_emailService is null || string.IsNullOrWhiteSpace(clip.User?.Email))
+            {
+                return;
+            }
+
+            try
+            {
+                await _emailService.SendClipDeletedAsync(clip.User.Email, clip.Title);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Could not send clip deletion email for clip {ClipId}", clip.Id);
             }
         }
     }

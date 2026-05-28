@@ -38,8 +38,8 @@ namespace Spectrum.API.Services.Reports
                     {
                         Id = response.ReportId,
                         ReportId = response.ReportId,
-                        ReporterId = Guid.Parse(response.ReporterId),
-                        TargetId = Guid.Parse(response.TargetId),
+                        ReporterId = response.ReporterId,
+                        TargetId = response.TargetId,
                         TargetType = response.TargetType,
                         Reason = response.Reason,
                         Status = response.Status,

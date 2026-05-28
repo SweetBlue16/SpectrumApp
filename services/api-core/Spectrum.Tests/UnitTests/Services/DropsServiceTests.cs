@@ -48,7 +48,7 @@ namespace Spectrum.Tests.UnitTests.Services
                     It.Is<ClaimKeyRequest>(request =>
                         request.UserId == userId.ToString() &&
                         request.EventId == eventId &&
-                        request.ChallengeCode == "READY"),
+                        request.ChallengeCode == string.Empty),
                     null,
                     null,
                     It.IsAny<CancellationToken>()))
@@ -137,7 +137,8 @@ namespace Spectrum.Tests.UnitTests.Services
                 RevealAt = now.AddHours(1),
                 EndAt = now.AddHours(2),
                 TotalSlots = 10,
-                PublicChallengeCode = "READY"
+                PublicChallengeCode = string.Empty,
+                AccessKeys = ["DEMO-KEY"]
             };
 
             await Assert.ThrowsAsync<SpectrumBusinessException>(() =>

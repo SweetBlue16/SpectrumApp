@@ -23,7 +23,6 @@ namespace Spectrum.API.Services.Drops
 
     public class DropsService : IDropsService
     {
-        private const int MaximumChallengeLength = 50;
         private const int MaximumRewardLength = 50;
 
         private readonly DropService.DropServiceClient _dropServiceClient;
@@ -46,7 +45,8 @@ namespace Spectrum.API.Services.Drops
 
         public async Task<DropActionResultDto> CreateEventAsync(CreateDropEventDto dto, Guid adminId, CancellationToken cancellationToken)
         {
-            ValidateEvent(dto.Title, dto.GameTitle, dto.Platform, dto.StartAt, dto.JoinDeadlineAt, dto.RevealAt, dto.EndAt, dto.TotalSlots, dto.PublicChallengeCode);
+            ValidateEvent(dto.Title, dto.GameTitle, dto.Platform, dto.StartAt, dto.JoinDeadlineAt, dto.RevealAt, dto.EndAt, dto.TotalSlots);
+            var rewardCodes = ValidateRewardCodes(dto.AccessKeys);
 
             var request = new CreateEventRequest
             {
@@ -61,10 +61,11 @@ namespace Spectrum.API.Services.Drops
                 RevealAt = ToUnixMilliseconds(dto.RevealAt),
                 EndAt = ToUnixMilliseconds(dto.EndAt),
                 TotalSlots = dto.TotalSlots,
-                PublicChallengeCode = dto.PublicChallengeCode.Trim(),
+                PublicChallengeCode = string.Empty,
                 CreatedByAdminId = adminId.ToString(),
                 PublishNow = dto.PublishNow
             };
+            request.AccessKeys.AddRange(rewardCodes);
 
             var response = await _dropServiceClient.CreateEventAsync(request, cancellationToken: cancellationToken);
             return EnsureActionSuccess(response);
@@ -72,9 +73,10 @@ namespace Spectrum.API.Services.Drops
 
         public async Task<DropActionResultDto> UpdateEventAsync(string eventId, UpdateDropEventDto dto, CancellationToken cancellationToken)
         {
-            ValidateEvent(dto.Title, dto.GameTitle, dto.Platform, dto.StartAt, dto.JoinDeadlineAt, dto.RevealAt, dto.EndAt, dto.TotalSlots, dto.PublicChallengeCode);
+            ValidateEvent(dto.Title, dto.GameTitle, dto.Platform, dto.StartAt, dto.JoinDeadlineAt, dto.RevealAt, dto.EndAt, dto.TotalSlots);
+            var rewardCodes = dto.AccessKeys.Count == 0 ? new List<string>() : ValidateRewardCodes(dto.AccessKeys);
 
-            var response = await _dropServiceClient.UpdateEventAsync(new UpdateEventRequest
+            var request = new UpdateEventRequest
             {
                 EventId = eventId,
                 Title = dto.Title.Trim(),
@@ -88,9 +90,12 @@ namespace Spectrum.API.Services.Drops
                 RevealAt = ToUnixMilliseconds(dto.RevealAt),
                 EndAt = ToUnixMilliseconds(dto.EndAt),
                 TotalSlots = dto.TotalSlots,
-                PublicChallengeCode = dto.PublicChallengeCode.Trim(),
+                PublicChallengeCode = string.Empty,
                 Status = dto.Status.Trim()
-            }, cancellationToken: cancellationToken);
+            };
+            request.AccessKeys.AddRange(rewardCodes);
+
+            var response = await _dropServiceClient.UpdateEventAsync(request, cancellationToken: cancellationToken);
 
             return EnsureActionSuccess(response);
         }
@@ -138,11 +143,6 @@ namespace Spectrum.API.Services.Drops
 
         public async Task<ClaimDropResultDto> ClaimAccessKeyAsync(Guid userId, string eventId, ClaimDropDto dto, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(dto.ChallengeCode) || dto.ChallengeCode.Length > MaximumChallengeLength)
-            {
-                throw new SpectrumBusinessException("challengeCodeInvalid");
-            }
-
             var user = await _userRepository.GetUserByIdAsync(userId)
                 ?? throw new SpectrumNotFoundException(Constants.ErrorMessages.UserNotFound);
 
@@ -152,9 +152,14 @@ namespace Spectrum.API.Services.Drops
                 {
                     UserId = userId.ToString(),
                     EventId = eventId,
-                    ChallengeCode = dto.ChallengeCode.Trim(),
+                    ChallengeCode = string.Empty,
                     Username = user.Username
                 }, cancellationToken: cancellationToken);
+
+                if (response.Success && !string.IsNullOrWhiteSpace(response.AccessKeyCode))
+                {
+                    await DeliverClaimedRewardAsync(user.Email, eventId, response.AccessKeyCode, cancellationToken);
+                }
 
                 return new ClaimDropResultDto
                 {
@@ -309,10 +314,36 @@ namespace Spectrum.API.Services.Drops
             }
         }
 
+        private async Task DeliverClaimedRewardAsync(
+            string recipientEmail,
+            string eventId,
+            string rewardCode,
+            CancellationToken cancellationToken
+        )
+        {
+            try
+            {
+                var eventStatus = await GetEventStatusAsync(eventId, exposeChallengeCode: false, cancellationToken);
+                await _rewardDeliveryService.SendRewardAsync(
+                    recipientEmail,
+                    $"{eventStatus.GameTitle} - {eventStatus.Platform}",
+                    rewardCode,
+                    cancellationToken
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Reward delivery email failed after claim for event {EventId}. Code was not logged.",
+                    eventId
+                );
+            }
+        }
+
         private static EventStatusDto MapEvent(EventStatusResponse response, bool exposeChallengeCode)
         {
             var revealAt = FromUnixMilliseconds(response.RevealAt);
-            var shouldExposeChallenge = exposeChallengeCode || DateTime.UtcNow >= revealAt;
 
             return new EventStatusDto
             {
@@ -330,14 +361,23 @@ namespace Spectrum.API.Services.Drops
                 TotalSlots = response.TotalSlots,
                 AvailableSlots = response.AvailableSlots,
                 Status = response.Status,
-                PublicChallengeCode = shouldExposeChallenge ? response.PublicChallengeCode : string.Empty,
+                PublicChallengeCode = string.Empty,
                 CreatedByAdminId = response.CreatedByAdminId,
                 WinnerUserId = string.IsNullOrWhiteSpace(response.WinnerUserId) ? null : response.WinnerUserId,
                 WinnerUsername = string.IsNullOrWhiteSpace(response.WinnerUsername) ? null : response.WinnerUsername,
                 FinishedAt = response.FinishedAt <= 0 ? null : FromUnixMilliseconds(response.FinishedAt),
                 RewardSentAt = response.RewardSentAt <= 0 ? null : FromUnixMilliseconds(response.RewardSentAt),
                 RewardDeliveryStatus = string.IsNullOrWhiteSpace(response.RewardDeliveryStatus) ? "PENDING" : response.RewardDeliveryStatus,
-                ParticipantsCount = response.ParticipantsCount
+                ParticipantsCount = response.ParticipantsCount,
+                RewardCodesAvailable = response.RewardCodesAvailable > 0 ? response.RewardCodesAvailable : response.KeysAvailable,
+                RewardCodesTotal = response.RewardCodesTotal > 0 ? response.RewardCodesTotal : response.KeysTotal,
+                Winners = response.Winners.Select(winner => new DropWinnerDto
+                {
+                    UserId = winner.UserId,
+                    Username = winner.Username,
+                    ClaimedAt = winner.ClaimedAt <= 0 ? null : FromUnixMilliseconds(winner.ClaimedAt),
+                    DeliveryStatus = string.IsNullOrWhiteSpace(winner.DeliveryStatus) ? "PENDING" : winner.DeliveryStatus
+                }).ToList()
             };
         }
 
@@ -364,8 +404,7 @@ namespace Spectrum.API.Services.Drops
             DateTime joinDeadlineAt,
             DateTime revealAt,
             DateTime endAt,
-            int totalSlots,
-            string publicChallengeCode
+            int totalSlots
         )
         {
             if (string.IsNullOrWhiteSpace(title) ||
@@ -380,15 +419,35 @@ namespace Spectrum.API.Services.Drops
                 throw new SpectrumBusinessException("totalSlotsInvalid");
             }
 
-            if (string.IsNullOrWhiteSpace(publicChallengeCode) || publicChallengeCode.Length > MaximumChallengeLength)
-            {
-                throw new SpectrumBusinessException("publicChallengeCodeInvalid");
-            }
-
             if (!(startAt < joinDeadlineAt && joinDeadlineAt <= revealAt && revealAt < endAt))
             {
                 throw new SpectrumBusinessException("eventDatesInvalid");
             }
+        }
+
+        private static List<string> ValidateRewardCodes(IEnumerable<string> rewardCodes)
+        {
+            var normalizedCodes = rewardCodes
+                .Select(code => code?.Trim() ?? string.Empty)
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .ToList();
+
+            if (normalizedCodes.Count == 0)
+            {
+                throw new SpectrumBusinessException("rewardCodesRequired");
+            }
+
+            if (normalizedCodes.Any(code => code.Length > MaximumRewardLength))
+            {
+                throw new SpectrumBusinessException("rewardCodeInvalid");
+            }
+
+            if (normalizedCodes.Count != normalizedCodes.Distinct(StringComparer.OrdinalIgnoreCase).Count())
+            {
+                throw new SpectrumBusinessException("rewardCodesDuplicated");
+            }
+
+            return normalizedCodes;
         }
 
         private static long ToUnixMilliseconds(DateTime value)

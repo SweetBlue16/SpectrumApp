@@ -1,6 +1,7 @@
 ﻿using Spectrum.API.Dtos.Profile;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Repositories;
+using Spectrum.API.Services.Email;
 using Spectrum.API.Utilities;
 
 namespace Spectrum.API.Services.Profile
@@ -16,10 +17,17 @@ namespace Spectrum.API.Services.Profile
     public class UserModerationService : IUserModerationService
     {
         private readonly IUserRepository _userRepository;
+        private readonly IEmailService? _emailService;
+        private readonly ILogger<UserModerationService>? _logger;
 
-        public UserModerationService(IUserRepository userRepository)
+        public UserModerationService(
+            IUserRepository userRepository,
+            IEmailService? emailService = null,
+            ILogger<UserModerationService>? logger = null)
         {
             _userRepository = userRepository;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<AdminUserDetailDto> GetUserDetailAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -111,6 +119,28 @@ namespace Spectrum.API.Services.Profile
             user.IsSuspended = suspend;
 
             await _userRepository.UpdateUserAsync(user);
+
+            if (suspend)
+            {
+                await TrySendSuspensionEmailAsync(user.Email, user.Id, cancellationToken);
+            }
+        }
+
+        private async Task TrySendSuspensionEmailAsync(string email, Guid userId, CancellationToken cancellationToken)
+        {
+            if (_emailService is null || string.IsNullOrWhiteSpace(email))
+            {
+                return;
+            }
+
+            try
+            {
+                await _emailService.SendAccountSuspendedAsync(email);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                _logger?.LogWarning(ex, "Could not send suspension email for user {UserId}", userId);
+            }
         }
     }
 }

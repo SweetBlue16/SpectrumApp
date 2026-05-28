@@ -430,18 +430,44 @@ namespace Spectrum.API.Services.Seeding
         {
             var definitions = new[]
             {
-                new { Key = "active-1", Status = "ACTIVE", Offset = -1, Winner = "", Reward = "PENDING" },
-                new { Key = "active-2", Status = "ACTIVE", Offset = 0, Winner = "", Reward = "PENDING" },
-                new { Key = "upcoming-1", Status = "SCHEDULED", Offset = 2, Winner = "", Reward = "PENDING" },
-                new { Key = "upcoming-2", Status = "SCHEDULED", Offset = 4, Winner = "", Reward = "PENDING" },
+                new { Key = "active-1", Status = "ACTIVE_JOIN", Offset = -1, Winner = "", Reward = "PENDING" },
+                new { Key = "active-2", Status = "ACTIVE_JOIN", Offset = 0, Winner = "", Reward = "PENDING" },
+                new { Key = "upcoming-1", Status = "UPCOMING", Offset = 2, Winner = "", Reward = "PENDING" },
+                new { Key = "upcoming-2", Status = "UPCOMING", Offset = 4, Winner = "", Reward = "PENDING" },
                 new { Key = "past-winner-pending", Status = "FINISHED", Offset = -10, Winner = users[2].Id.ToString(), Reward = "PENDING" },
-                new { Key = "past-winner-sent", Status = "FINISHED", Offset = -14, Winner = users[3].Id.ToString(), Reward = "SENT" }
+                new { Key = "past-winner-sent", Status = "EXHAUSTED", Offset = -14, Winner = users[3].Id.ToString(), Reward = "SENT" }
             };
 
             foreach (var item in definitions)
             {
                 var start = now.AddDays(item.Offset);
                 var winnerUser = users.FirstOrDefault(user => user.Id.ToString() == item.Winner);
+                var rewardCodes = new BsonArray(Enumerable.Range(1, 3).Select(codeIndex =>
+                {
+                    var claimed = codeIndex == 1 && item.Winner != "";
+                    return new BsonDocument
+                    {
+                        ["code"] = $"{DemoPrefix}REWARD-{item.Key}-{codeIndex}",
+                        ["claimed"] = claimed,
+                        ["claimedByUserId"] = claimed ? item.Winner : "",
+                        ["claimedByUsername"] = claimed ? winnerUser?.Username ?? "" : "",
+                        ["claimedAt"] = claimed ? new BsonInt64(ToUnixMilliseconds(start.AddHours(4))) : BsonNull.Value,
+                        ["deliveryStatus"] = claimed ? item.Reward : "PENDING"
+                    };
+                }));
+                var winners = item.Winner == ""
+                    ? new BsonArray()
+                    : new BsonArray
+                    {
+                        new BsonDocument
+                        {
+                            ["userId"] = item.Winner,
+                            ["username"] = winnerUser?.Username ?? "",
+                            ["rewardCode"] = $"{DemoPrefix}REWARD-{item.Key}-1",
+                            ["claimedAt"] = new BsonInt64(ToUnixMilliseconds(start.AddHours(4))),
+                            ["deliveryStatus"] = item.Reward
+                        }
+                    };
                 yield return new BsonDocument
                 {
                     ["_id"] = $"{DemoPrefix.ToLowerInvariant()}{item.Key}",
@@ -451,8 +477,8 @@ namespace Spectrum.API.Services.Seeding
                     ["gameTitle"] = item.Key.Contains("2") ? "Red Dead Redemption 2" : "Elden Ring",
                     ["rawgGameId"] = item.Key.Contains("2") ? 28 : 326243,
                     ["platform"] = item.Key.Contains("2") ? "Xbox" : "PC",
-                    ["keysTotal"] = 100,
-                    ["keysAvailable"] = item.Winner == "" ? 90 : 89,
+                    ["keysTotal"] = 3,
+                    ["keysAvailable"] = item.Winner == "" ? 3 : 2,
                     ["totalSlots"] = 100,
                     ["availableSlots"] = item.Winner == "" ? 90 : 89,
                     ["status"] = item.Status,
@@ -460,14 +486,16 @@ namespace Spectrum.API.Services.Seeding
                     ["joinDeadlineAt"] = ToUnixMilliseconds(start.AddHours(2)),
                     ["revealAt"] = ToUnixMilliseconds(start.AddHours(3)),
                     ["endAt"] = ToUnixMilliseconds(start.AddHours(5)),
-                    ["publicChallengeCode"] = $"DEMO-CODE-{item.Key}".ToUpperInvariant()[..Math.Min(50, $"DEMO-CODE-{item.Key}".Length)],
+                    ["publicChallengeCode"] = "",
                     ["createdByAdminId"] = users[0].Id.ToString(),
                     ["winnerUserId"] = item.Winner,
                     ["winnerUsername"] = winnerUser?.Username ?? "",
                     ["finishedAt"] = item.Winner == "" ? BsonNull.Value : new BsonInt64(ToUnixMilliseconds(start.AddHours(4))),
                     ["rewardSentAt"] = item.Reward == "SENT" ? new BsonInt64(ToUnixMilliseconds(start.AddHours(8))) : BsonNull.Value,
                     ["rewardDeliveryStatus"] = item.Reward,
-                    ["participantsCount"] = 10
+                    ["participantsCount"] = 10,
+                    ["rewardCodes"] = rewardCodes,
+                    ["winners"] = winners
                 };
             }
         }

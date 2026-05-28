@@ -151,6 +151,24 @@ namespace Spectrum.API.Services.Profile
                 throw new SpectrumNotFoundException("User not found.");
             }
 
+            var normalizedUsername = profileDto.Username.Trim();
+            if (normalizedUsername.Length is < 3 or > 50)
+            {
+                throw new SpectrumBusinessException("El nombre de usuario debe tener entre 3 y 50 caracteres.");
+            }
+
+            var usernameExists = await _context.Users
+                .AsNoTracking()
+                .AnyAsync(existingUser =>
+                    existingUser.Id != userId &&
+                    existingUser.Username.ToLower() == normalizedUsername.ToLower());
+
+            if (usernameExists)
+            {
+                throw new SpectrumBusinessException("El nombre de usuario ya está en uso.");
+            }
+
+            user.Username = normalizedUsername;
             user.Biography = profileDto.Biography;
             user.ProfilePicture = profileDto.ProfilePicture;
 

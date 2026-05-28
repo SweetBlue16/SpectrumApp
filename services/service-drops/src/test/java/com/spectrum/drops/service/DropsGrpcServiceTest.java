@@ -3,6 +3,8 @@ package com.spectrum.drops.service;
 import com.spectrum.drops.grpc.*;
 import com.spectrum.drops.model.Event;
 import com.spectrum.drops.model.EventParticipant;
+import com.spectrum.drops.model.RewardCode;
+import com.spectrum.drops.model.Winner;
 import com.spectrum.drops.repository.EventParticipantRepository;
 import com.spectrum.drops.repository.EventRepository;
 import io.grpc.stub.StreamObserver;
@@ -18,6 +20,7 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.UpdateDefinition;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -51,16 +54,18 @@ class DropsGrpcServiceTest {
     }
 
     @Test
-    void claimAccessKeyWhenChallengeMatchesShouldAssignSingleWinner() {
+    void claimAccessKeyWhenRewardCodeIsAvailableShouldAssignWinner() {
         String eventId = "event-1";
         String userId = "user-1";
         when(participantRepository.existsByEventIdAndUserId(eventId, userId)).thenReturn(true);
 
         Event winner = activeEvent(eventId);
-        winner.setWinnerUserId(userId);
-        winner.setWinnerUsername("spectrum");
-        winner.setFinishedAt(Instant.now().toEpochMilli());
-        winner.setStatus("FINISHED");
+        winner.getRewardCodes().get(0).setClaimed(true);
+        winner.getRewardCodes().get(0).setClaimedByUserId(userId);
+        winner.getRewardCodes().get(0).setClaimedByUsername("spectrum");
+        winner.getRewardCodes().get(0).setClaimedAt(Instant.now().toEpochMilli());
+        winner.setKeysAvailable(1);
+        winner.setStatus("REVEAL_ACTIVE");
 
         when(mongoTemplate.findAndModify(
                 any(Query.class),
@@ -68,17 +73,19 @@ class DropsGrpcServiceTest {
                 any(FindAndModifyOptions.class),
                 eq(Event.class)))
                 .thenReturn(winner);
+        when(mongoTemplate.updateFirst(any(Query.class), any(UpdateDefinition.class), eq(Event.class)))
+                .thenReturn(null);
 
         CapturingObserver<ClaimKeyResponse> observer = new CapturingObserver<>();
         dropsGrpcService.claimAccessKey(ClaimKeyRequest.newBuilder()
                 .setEventId(eventId)
                 .setUserId(userId)
                 .setUsername("spectrum")
-                .setChallengeCode("READY")
                 .build(), observer);
 
         assertTrue(observer.value.getSuccess());
         assertEquals(userId, observer.value.getWinnerUserId());
+        assertEquals("DEMO-KEY-1", observer.value.getAccessKeyCode());
         assertTrue(observer.completed);
     }
 
@@ -91,10 +98,12 @@ class DropsGrpcServiceTest {
         when(participantRepository.existsByEventIdAndUserId(eq(eventId), anyString())).thenReturn(true);
         when(eventRepository.findById(eventId)).thenAnswer(invocation -> {
             Event event = activeEvent(eventId);
-            event.setWinnerUserId("winner");
-            event.setWinnerUsername("winner-name");
-            event.setFinishedAt(Instant.now().toEpochMilli());
-            event.setStatus("FINISHED");
+            event.setWinners(List.of(Winner.builder()
+                    .userId("winner")
+                    .username("winner-name")
+                    .claimedAt(Instant.now().toEpochMilli())
+                    .build()));
+            event.setStatus("EXHAUSTED");
             return Optional.of(event);
         });
         when(mongoTemplate.findAndModify(
@@ -108,12 +117,16 @@ class DropsGrpcServiceTest {
                     }
 
                     Event event = activeEvent(eventId);
-                    event.setWinnerUserId("winner");
-                    event.setWinnerUsername("winner-name");
-                    event.setFinishedAt(Instant.now().toEpochMilli());
-                    event.setStatus("FINISHED");
+                    event.getRewardCodes().get(0).setClaimed(true);
+                    event.getRewardCodes().get(0).setClaimedByUserId("winner");
+                    event.getRewardCodes().get(0).setClaimedByUsername("winner-name");
+                    event.getRewardCodes().get(0).setClaimedAt(Instant.now().toEpochMilli());
+                    event.setKeysAvailable(0);
+                    event.setStatus("EXHAUSTED");
                     return event;
                 });
+        when(mongoTemplate.updateFirst(any(Query.class), any(UpdateDefinition.class), eq(Event.class)))
+                .thenReturn(null);
 
         int attempts = 100;
         CountDownLatch latch = new CountDownLatch(attempts);
@@ -125,7 +138,6 @@ class DropsGrpcServiceTest {
                         .setEventId(eventId)
                         .setUserId("user-" + userNumber)
                         .setUsername("user-" + userNumber)
-                        .setChallengeCode("READY")
                         .build(), new StreamObserver<>() {
                     @Override
                     public void onNext(ClaimKeyResponse value) {
@@ -150,6 +162,53 @@ class DropsGrpcServiceTest {
 
         assertEquals(attempts, responses.size());
         assertEquals(1, responses.stream().filter(ClaimKeyResponse::getSuccess).count());
+    }
+
+    @Test
+    void claimAccessKeyWhenMultipleCodesExistShouldAllowMultipleDifferentWinners() {
+        String eventId = "event-multi";
+        when(participantRepository.existsByEventIdAndUserId(eq(eventId), anyString())).thenReturn(true);
+
+        Event firstClaim = activeEvent(eventId);
+        firstClaim.getRewardCodes().get(0).setClaimed(true);
+        firstClaim.getRewardCodes().get(0).setClaimedByUserId("user-1");
+        firstClaim.getRewardCodes().get(0).setClaimedByUsername("user-1");
+        firstClaim.getRewardCodes().get(0).setClaimedAt(Instant.now().toEpochMilli());
+        firstClaim.setKeysAvailable(1);
+
+        Event secondClaim = activeEvent(eventId);
+        secondClaim.getRewardCodes().get(1).setClaimed(true);
+        secondClaim.getRewardCodes().get(1).setClaimedByUserId("user-2");
+        secondClaim.getRewardCodes().get(1).setClaimedByUsername("user-2");
+        secondClaim.getRewardCodes().get(1).setClaimedAt(Instant.now().toEpochMilli());
+        secondClaim.setKeysAvailable(0);
+
+        when(mongoTemplate.findAndModify(
+                any(Query.class),
+                any(UpdateDefinition.class),
+                any(FindAndModifyOptions.class),
+                eq(Event.class)))
+                .thenReturn(firstClaim, secondClaim);
+        when(mongoTemplate.updateFirst(any(Query.class), any(UpdateDefinition.class), eq(Event.class)))
+                .thenReturn(null);
+
+        CapturingObserver<ClaimKeyResponse> firstObserver = new CapturingObserver<>();
+        dropsGrpcService.claimAccessKey(ClaimKeyRequest.newBuilder()
+                .setEventId(eventId)
+                .setUserId("user-1")
+                .setUsername("user-1")
+                .build(), firstObserver);
+
+        CapturingObserver<ClaimKeyResponse> secondObserver = new CapturingObserver<>();
+        dropsGrpcService.claimAccessKey(ClaimKeyRequest.newBuilder()
+                .setEventId(eventId)
+                .setUserId("user-2")
+                .setUsername("user-2")
+                .build(), secondObserver);
+
+        assertTrue(firstObserver.value.getSuccess());
+        assertTrue(secondObserver.value.getSuccess());
+        assertNotEquals(firstObserver.value.getAccessKeyCode(), secondObserver.value.getAccessKeyCode());
     }
 
     @Test
@@ -194,7 +253,7 @@ class DropsGrpcServiceTest {
                 .setRevealAt(now + 3000)
                 .setEndAt(now + 4000)
                 .setTotalSlots(10)
-                .setPublicChallengeCode("READY")
+                .addAccessKeys("DEMO-KEY-1")
                 .build(), observer);
 
         assertFalse(observer.value.getSuccess());
@@ -210,7 +269,7 @@ class DropsGrpcServiceTest {
         dropsGrpcService.getEventStatus(GetEventRequest.newBuilder().setEventId("event-1").build(), observer);
 
         assertEquals("event-1", observer.value.getEventId());
-        assertEquals("ACTIVE", observer.value.getStatus());
+        assertEquals("ACTIVE_JOIN", observer.value.getStatus());
         assertEquals(10, observer.value.getTotalSlots());
     }
 
@@ -230,7 +289,14 @@ class DropsGrpcServiceTest {
         event.setEndAt(now + 20_000);
         event.setTotalSlots(10);
         event.setAvailableSlots(10);
-        event.setPublicChallengeCode("READY");
+        event.setKeysTotal(2);
+        event.setKeysAvailable(2);
+        event.setRewardCodes(List.of(
+                RewardCode.builder().code("DEMO-KEY-1").claimed(false).deliveryStatus("PENDING").build(),
+                RewardCode.builder().code("DEMO-KEY-2").claimed(false).deliveryStatus("PENDING").build()
+        ));
+        event.setWinners(List.of());
+        event.setPublicChallengeCode("");
         event.setRewardDeliveryStatus("PENDING");
         return event;
     }

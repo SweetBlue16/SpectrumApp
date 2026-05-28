@@ -101,7 +101,10 @@ namespace Spectrum.API.Repositories
         /// <inheritdoc />
         public async Task<GameClip?> GetClipByIdAsync(Guid clipId)
         {
-            return await _context.GameClips.FirstOrDefaultAsync(c => c.Id == clipId);
+            return await _context.GameClips
+                .Include(c => c.User)
+                .Include(c => c.Game)
+                .FirstOrDefaultAsync(c => c.Id == clipId);
         }
 
         /// <inheritdoc />

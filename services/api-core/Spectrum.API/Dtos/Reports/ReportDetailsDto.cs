@@ -4,8 +4,8 @@
     {
         public string Id { get; set; } = string.Empty;
         public string ReportId { get; set; } = string.Empty;
-        public Guid ReporterId { get; set; }
-        public Guid TargetId { get; set; }
+        public string ReporterId { get; set; } = string.Empty;
+        public string TargetId { get; set; } = string.Empty;
         public string TargetType { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;

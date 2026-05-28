@@ -24,8 +24,8 @@ namespace Spectrum.API.Services.Email
             return SendCodeAsync(
                 email,
                 "Verifica tu cuenta de Spectrum",
-                "Verificacion de cuenta",
-                "Usa este codigo para activar tu cuenta en Spectrum:",
+                "Verificación de cuenta",
+                "Usa este código para activar tu cuenta en Spectrum:",
                 code
             );
         }
@@ -34,9 +34,9 @@ namespace Spectrum.API.Services.Email
         {
             return SendCodeAsync(
                 email,
-                "Recupera tu contrasena de Spectrum",
-                "Recuperacion de contrasena",
-                "Usa este codigo para continuar con la recuperacion de tu contrasena:",
+                "Recupera tu contraseña de Spectrum",
+                "Recuperación de contraseña",
+                "Usa este código para continuar con la recuperación de tu contraseña:",
                 code
             );
         }
@@ -45,9 +45,9 @@ namespace Spectrum.API.Services.Email
         {
             return SendCodeAsync(
                 email,
-                "Confirma tu cambio de contrasena",
-                "Cambio de contrasena",
-                "Usa este codigo para confirmar el cambio de contrasena de tu cuenta:",
+                "Confirma tu cambio de contraseña",
+                "Cambio de contraseña",
+                "Usa este código para confirmar el cambio de contraseña de tu cuenta:",
                 code
             );
         }
@@ -58,9 +58,39 @@ namespace Spectrum.API.Services.Email
                 email,
                 $"Tu recompensa de Spectrum: {eventTitle}",
                 "Ganaste un sorteo en Spectrum",
-                $"Felicidades. Ganaste el sorteo {eventTitle}. Tienes 24 horas para canjear este codigo:",
+                $"Felicidades. Ganaste el sorteo {eventTitle}. Tienes 24 horas para canjear este código:",
                 rewardCode,
-                "No compartas este codigo. Si no reconoces este premio, contacta al soporte de Spectrum."
+                "No compartas este código. Si no reconoces este premio, contacta al soporte de Spectrum."
+            );
+        }
+
+        public Task SendReviewDeletedAsync(string email, string reviewTitle)
+        {
+            return SendNoticeAsync(
+                email,
+                "Tu reseña fue retirada de Spectrum",
+                "Reseña retirada",
+                $"Un administrador retiró tu reseña \"{reviewTitle}\". Si crees que fue un error, contacta a soporte."
+            );
+        }
+
+        public Task SendClipDeletedAsync(string email, string clipTitle)
+        {
+            return SendNoticeAsync(
+                email,
+                "Tu clip fue retirado de Spectrum",
+                "Clip retirado",
+                $"Un administrador retiró tu clip \"{clipTitle}\". Si crees que fue un error, contacta a soporte."
+            );
+        }
+
+        public Task SendAccountSuspendedAsync(string email)
+        {
+            return SendNoticeAsync(
+                email,
+                "Tu cuenta de Spectrum fue suspendida",
+                "Cuenta suspendida",
+                "Tu cuenta está suspendida temporalmente. Contacta a soporte si crees que es un error."
             );
         }
 
@@ -72,8 +102,13 @@ namespace Spectrum.API.Services.Email
                 title,
                 intro,
                 code,
-                "Este codigo expira pronto. Si no solicitaste este correo, puedes ignorarlo."
+                "Este código expira en 10 minutos. Si no solicitaste este correo, puedes ignorarlo."
             );
+        }
+
+        private Task SendNoticeAsync(string email, string subject, string title, string body)
+        {
+            return SendCustomAsync(email, subject, title, body, string.Empty, "Gracias por ayudar a mantener segura la comunidad de Spectrum.");
         }
 
         private async Task SendCustomAsync(string email, string subject, string title, string intro, string code, string footer)
@@ -121,6 +156,10 @@ namespace Spectrum.API.Services.Email
 
         private static string BuildHtmlTemplate(string title, string intro, string code, string footer)
         {
+            var encodedCode = string.IsNullOrWhiteSpace(code)
+                ? string.Empty
+                : $"""<p style="font-size:28px;letter-spacing:6px;font-weight:700;color:#a987ff;margin:24px 0;">{WebUtility.HtmlEncode(code)}</p>""";
+
             return $"""
                 <!doctype html>
                 <html lang="es">
@@ -130,7 +169,7 @@ namespace Spectrum.API.Services.Email
                     <div style="background:#1b1b1f;border:1px solid #3b2d68;border-radius:8px;padding:24px;">
                       <h2 style="margin:0 0 12px;color:#ffffff;">{WebUtility.HtmlEncode(title)}</h2>
                       <p style="line-height:1.5;color:#d8d8e2;">{WebUtility.HtmlEncode(intro)}</p>
-                      <p style="font-size:28px;letter-spacing:6px;font-weight:700;color:#a987ff;margin:24px 0;">{WebUtility.HtmlEncode(code)}</p>
+                      {encodedCode}
                       <p style="line-height:1.5;color:#aaa;">{WebUtility.HtmlEncode(footer)}</p>
                     </div>
                   </div>

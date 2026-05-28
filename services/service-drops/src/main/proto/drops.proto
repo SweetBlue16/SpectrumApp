@@ -64,6 +64,16 @@ message EventStatusResponse {
   int64 reward_sent_at = 22;
   string reward_delivery_status = 23;
   int32 participants_count = 24;
+  repeated WinnerStatus winners = 25;
+  int32 reward_codes_total = 26;
+  int32 reward_codes_available = 27;
+}
+
+message WinnerStatus {
+  string user_id = 1;
+  string username = 2;
+  int64 claimed_at = 3;
+  string delivery_status = 4;
 }
 
 message WonKeysRequest {
@@ -115,6 +125,7 @@ message UpdateEventRequest {
   int32 total_slots = 12;
   string public_challenge_code = 13;
   string status = 14;
+  repeated string access_keys = 15;
 }
 
 message ListEventsRequest {

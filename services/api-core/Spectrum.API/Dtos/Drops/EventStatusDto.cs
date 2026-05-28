@@ -24,8 +24,19 @@ namespace Spectrum.API.Dtos.Drops
         public DateTime? RewardSentAt { get; set; }
         public string RewardDeliveryStatus { get; set; } = "PENDING";
         public int ParticipantsCount { get; set; }
-        public int KeysAvailable => AvailableSlots;
-        public int KeysTotal => TotalSlots;
+        public int RewardCodesAvailable { get; set; }
+        public int RewardCodesTotal { get; set; }
+        public List<DropWinnerDto> Winners { get; set; } = new();
+        public int KeysAvailable => RewardCodesAvailable;
+        public int KeysTotal => RewardCodesTotal;
         public DateTime EndDate => EndAt;
+    }
+
+    public class DropWinnerDto
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string Username { get; set; } = string.Empty;
+        public DateTime? ClaimedAt { get; set; }
+        public string DeliveryStatus { get; set; } = "PENDING";
     }
 }

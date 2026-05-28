@@ -127,7 +127,12 @@ namespace Spectrum.API.Controllers
                 return;
             }
 
-            var reporterIds = reports.Select(report => report.ReporterId).Distinct().ToArray();
+            var reporterIds = reports
+                .Select(report => TryParseGuid(report.ReporterId))
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToArray();
             var reporters = await _context.Users
                 .AsNoTracking()
                 .Where(user => reporterIds.Contains(user.Id))
@@ -137,32 +142,46 @@ namespace Spectrum.API.Controllers
             {
                 report.Id = report.ReportId;
                 report.CreatedAt = report.ReportedAt;
-                report.ReporterUsername = reporters.GetValueOrDefault(report.ReporterId, "Usuario Spectrum");
+                var reporterId = TryParseGuid(report.ReporterId);
+                report.ReporterUsername = reporterId.HasValue
+                    ? reporters.GetValueOrDefault(reporterId.Value, "Usuario Spectrum")
+                    : "Usuario Spectrum";
                 report.TargetContentSnippet = await ResolveTargetSnippetAsync(report, cancellationToken);
             }
         }
 
         private async Task<string> ResolveTargetSnippetAsync(ReportDetailsDto report, CancellationToken cancellationToken)
         {
+            var targetId = TryParseGuid(report.TargetId);
+            if (!targetId.HasValue)
+            {
+                return "Contenido alojado en el microservicio social.";
+            }
+
             return report.TargetType.ToUpperInvariant() switch
             {
                 "REVIEW" => await _context.Reviews
                     .AsNoTracking()
-                    .Where(review => review.Id == report.TargetId)
+                    .Where(review => review.Id == targetId.Value)
                     .Select(review => review.Title + ": " + review.Content)
                     .FirstOrDefaultAsync(cancellationToken) ?? string.Empty,
                 "USER" => await _context.Users
                     .AsNoTracking()
-                    .Where(user => user.Id == report.TargetId)
+                    .Where(user => user.Id == targetId.Value)
                     .Select(user => user.Username + " - " + user.Email)
                     .FirstOrDefaultAsync(cancellationToken) ?? string.Empty,
                 "GAME_CLIP" => await _context.GameClips
                     .AsNoTracking()
-                    .Where(clip => clip.Id == report.TargetId)
+                    .Where(clip => clip.Id == targetId.Value)
                     .Select(clip => clip.Title)
                     .FirstOrDefaultAsync(cancellationToken) ?? string.Empty,
                 _ => "Contenido alojado en el microservicio social."
             };
+        }
+
+        private static Guid? TryParseGuid(string value)
+        {
+            return Guid.TryParse(value, out var parsed) ? parsed : null;
         }
     }
 }
