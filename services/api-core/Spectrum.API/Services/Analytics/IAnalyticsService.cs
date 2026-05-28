@@ -257,7 +257,7 @@ namespace Spectrum.API.Services.Analytics
             var normalizedPageSize = Math.Clamp(pageSize, 1, 25);
             var window = ResolveWeeklyWindow(DateTime.UtcNow);
 
-            var query = _context.Reviews
+            var reviewQuery = _context.Reviews
                 .AsNoTracking()
                 .Include(review => review.User)
                 .Where(review => review.CreatedAt >= window.Start &&
@@ -267,22 +267,37 @@ namespace Spectrum.API.Services.Analytics
                                  review.ImageUrl != null &&
                                  review.ImageUrl != string.Empty);
 
-            var total = await query.CountAsync(cancellationToken);
-            var reviews = await query
+            var reviewClips = await reviewQuery
                 .OrderByDescending(review => review.LikesCount)
                 .ThenByDescending(review => review.CreatedAt)
-                .Skip((normalizedPage - 1) * normalizedPageSize)
-                .Take(normalizedPageSize)
                 .ToListAsync(cancellationToken);
 
-            return new PagedResult<WeeklyReviewDto>
-            {
-                Items = reviews.Select(review =>
+            var uploadedClips = await _context.GameClips
+                .AsNoTracking()
+                .Include(clip => clip.User)
+                .Include(clip => clip.Game)
+                .Where(clip => clip.CreatedAt >= window.Start && clip.CreatedAt < window.End)
+                .OrderByDescending(clip => clip.CreatedAt)
+                .ToListAsync(cancellationToken);
+
+            var allClips = reviewClips
+                .Select(review =>
                 {
                     var game = _gameRepository.GetById(review.GameId);
                     return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl);
-                }).ToList(),
-                TotalCount = total,
+                })
+                .Concat(uploadedClips.Select(MapWeeklyClip))
+                .OrderByDescending(clip => clip.LikesCount)
+                .ThenByDescending(clip => clip.CreatedAt)
+                .ToList();
+
+            return new PagedResult<WeeklyReviewDto>
+            {
+                Items = allClips
+                    .Skip((normalizedPage - 1) * normalizedPageSize)
+                    .Take(normalizedPageSize)
+                    .ToList(),
+                TotalCount = allClips.Count,
                 Page = normalizedPage,
                 PageSize = normalizedPageSize
             };
@@ -302,14 +317,25 @@ namespace Spectrum.API.Services.Analytics
                                  review.ImageUrl != string.Empty)
                 .OrderByDescending(review => review.LikesCount)
                 .ThenByDescending(review => review.CreatedAt)
-                .Take(3)
+                .ToListAsync(cancellationToken);
+
+            var uploadedClips = await _context.GameClips
+                .AsNoTracking()
+                .Include(clip => clip.User)
+                .Include(clip => clip.Game)
+                .Where(clip => clip.CreatedAt >= window.Start && clip.CreatedAt < window.End)
                 .ToListAsync(cancellationToken);
 
             return reviews.Select(review =>
-            {
-                var game = _gameRepository.GetById(review.GameId);
-                return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl);
-            }).ToList();
+                {
+                    var game = _gameRepository.GetById(review.GameId);
+                    return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl);
+                })
+                .Concat(uploadedClips.Select(MapWeeklyClip))
+                .OrderByDescending(clip => clip.LikesCount)
+                .ThenByDescending(clip => clip.CreatedAt)
+                .Take(3)
+                .ToList();
         }
 
         private TopGameMetricDto MapTopGame(int gameId, int count)
@@ -426,6 +452,27 @@ namespace Spectrum.API.Services.Analytics
                 DislikesCount = review.DislikesCount,
                 CommentsCount = commentsCount,
                 CreatedAt = review.CreatedAt
+            };
+        }
+
+        private static WeeklyReviewDto MapWeeklyClip(Models.GameClip clip)
+        {
+            return new WeeklyReviewDto
+            {
+                ReviewId = clip.Id,
+                UserId = clip.UserId,
+                Username = clip.User?.Username ?? string.Empty,
+                GameId = 0,
+                GameTitle = clip.Game?.Title ?? string.Empty,
+                GameCoverUrl = clip.Game?.CoverImageUrl ?? string.Empty,
+                Title = clip.Title,
+                Content = clip.Description ?? string.Empty,
+                AttachmentUrl = clip.Url,
+                AttachmentType = "video",
+                LikesCount = 0,
+                DislikesCount = 0,
+                CommentsCount = 0,
+                CreatedAt = clip.CreatedAt
             };
         }
 

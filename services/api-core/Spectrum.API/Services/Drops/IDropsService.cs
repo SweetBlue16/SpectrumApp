@@ -73,6 +73,12 @@ namespace Spectrum.API.Services.Drops
 
         public async Task<DropActionResultDto> UpdateEventAsync(string eventId, UpdateDropEventDto dto, CancellationToken cancellationToken)
         {
+            var current = await GetEventStatusAsync(eventId, exposeChallengeCode: false, cancellationToken);
+            if (!CanEditEvent(current.Status))
+            {
+                throw new SpectrumBusinessException("dropEventNotEditable");
+            }
+
             ValidateEvent(dto.Title, dto.GameTitle, dto.Platform, dto.StartAt, dto.JoinDeadlineAt, dto.RevealAt, dto.EndAt, dto.TotalSlots);
             var rewardCodes = dto.AccessKeys.Count == 0 ? new List<string>() : ValidateRewardCodes(dto.AccessKeys);
 
@@ -394,6 +400,13 @@ namespace Spectrum.API.Services.Drops
                 EventId = response.EventId,
                 Message = response.Message
             };
+        }
+
+        private static bool CanEditEvent(string status)
+        {
+            return status.Equals("UPCOMING", StringComparison.OrdinalIgnoreCase) ||
+                   status.Equals("SCHEDULED", StringComparison.OrdinalIgnoreCase) ||
+                   status.Equals("DRAFT", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void ValidateEvent(

@@ -40,5 +40,37 @@ namespace Spectrum.Tests.UnitTests.Services
                 Times.Never
             );
         }
+
+        [Fact]
+        public async Task CastReviewVoteAsyncWhenReviewBelongsToUserShouldThrowForbidden()
+        {
+            var ownerId = Guid.NewGuid();
+            var reviewId = Guid.NewGuid();
+            var reviewRepositoryMock = new Mock<IReviewRepository>();
+            var loggerMock = new Mock<ILogger<VoteServiceClient>>();
+            var grpcClient = new VoteService.VoteServiceClient(new Mock<CallInvoker>().Object);
+            var voteService = new VoteServiceClient(
+                grpcClient,
+                reviewRepositoryMock.Object,
+                loggerMock.Object
+            );
+
+            reviewRepositoryMock
+                .Setup(repository => repository.GetByIdAsync(reviewId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Spectrum.API.Models.Review { Id = reviewId, UserId = ownerId });
+
+            await Assert.ThrowsAsync<SpectrumForbiddenException>(() =>
+                voteService.CastReviewVoteAsync(reviewId, ownerId, true));
+
+            reviewRepositoryMock.Verify(
+                repository => repository.UpdateCountersAsync(
+                    It.IsAny<Guid>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()
+                ),
+                Times.Never
+            );
+        }
     }
 }
