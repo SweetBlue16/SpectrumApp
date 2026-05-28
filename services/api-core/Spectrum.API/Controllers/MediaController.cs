@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Dtos.Media;
 using Spectrum.API.Services.Storage;
 using Spectrum.API.Services.Clips;
+using Spectrum.API.Dtos.Votes;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
@@ -121,10 +122,7 @@ namespace Spectrum.API.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> CompleteVideoUpload([FromBody] CompleteUploadRequestDto request)
         {
-            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            if (!TryGetUserId(out var userId))
             {
                 return Unauthorized();
             }
@@ -165,10 +163,7 @@ namespace Spectrum.API.Controllers
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
         public async Task<IActionResult> DeleteClip(Guid clipId)
         {
-            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            if (!TryGetUserId(out var userId))
             {
                 return Unauthorized();
             }
@@ -176,6 +171,29 @@ namespace Spectrum.API.Controllers
             await gameClipService.DeleteClipAsync(clipId, userId);
 
             return NoContent();
+        }
+
+        [HttpPost("clips/{clipId}/vote")]
+        [ProducesResponseType(typeof(VoteResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> VoteClip(Guid clipId, [FromBody] CastReviewVoteDto request)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized();
+            }
+
+            return Ok(await gameClipService.CastClipVoteAsync(clipId, userId, request.IsPositive));
+        }
+
+        private bool TryGetUserId(out Guid userId)
+        {
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            return Guid.TryParse(userIdClaim, out userId);
         }
     }
 }

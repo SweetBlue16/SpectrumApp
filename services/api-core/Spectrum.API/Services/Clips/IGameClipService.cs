@@ -1,4 +1,5 @@
 using Spectrum.API.Dtos.Media;
+using Spectrum.API.Dtos.Votes;
 using Spectrum.API.Exceptions;
 using Spectrum.API.Models;
 using Spectrum.API.Repositories;
@@ -27,6 +28,8 @@ namespace Spectrum.API.Services.Clips
         /// </summary>
         /// <returns>A collection of <see cref="GameClipSummaryDto"/> optimized for view representations.</returns>
         Task<IEnumerable<GameClipSummaryDto>> GetClipsByUserIdAsync(Guid userId);
+
+        Task<VoteResultDto> CastClipVoteAsync(Guid clipId, Guid userId, bool isPositive);
 
         /// <summary>
         /// Deletes a specific game clip from active queries using a soft-delete flag.
@@ -122,7 +125,10 @@ namespace Spectrum.API.Services.Clips
         /// <inheritdoc />
         public async Task<IEnumerable<GameClipSummaryDto>> GetClipsByUserIdAsync(Guid userId)
         {
-            var clips = await _clipRepository.GetClipsByUserIdAsync(userId);
+            var clips = (await _clipRepository.GetClipsByUserIdAsync(userId)).ToList();
+            var clipIds = clips.Select(clip => clip.Id).ToArray();
+            var counts = await _clipRepository.GetVoteCountsByClipIdsAsync(clipIds);
+            var userVotes = await _clipRepository.GetUserVotesByClipIdsAsync(clipIds, userId);
 
             return clips.Select(c => new GameClipSummaryDto
             {
@@ -131,10 +137,60 @@ namespace Spectrum.API.Services.Clips
                 ThumbnailUrl = c.Game?.CoverImageUrl,
                 GameName = c.Game?.Title,
                 Url = c.Url,
-                LikesCount = 0,
-                DislikesCount = 0,
+                LikesCount = counts.TryGetValue(c.Id, out var count) ? count.Likes : 0,
+                DislikesCount = counts.TryGetValue(c.Id, out count) ? count.Dislikes : 0,
+                UserVote = userVotes.TryGetValue(c.Id, out var vote) ? vote : null,
+                UserId = c.UserId,
                 CreatedAt = c.CreatedAt
             });
+        }
+
+        /// <inheritdoc />
+        public async Task<VoteResultDto> CastClipVoteAsync(Guid clipId, Guid userId, bool isPositive)
+        {
+            var clip = await _clipRepository.GetClipByIdAsync(clipId);
+
+            if (clip is null)
+            {
+                throw new SpectrumNotFoundException("The requested clip was not found.");
+            }
+
+            if (clip.UserId == userId)
+            {
+                throw new SpectrumForbiddenException("No puedes votar tu propio clip.");
+            }
+
+            var existingVote = await _clipRepository.GetVoteAsync(clipId, userId);
+
+            if (existingVote is null)
+            {
+                await _clipRepository.AddVoteAsync(new GameClipVote
+                {
+                    ClipId = clipId,
+                    UserId = userId,
+                    IsPositive = isPositive
+                });
+            }
+            else if (existingVote.IsPositive == isPositive)
+            {
+                await _clipRepository.DeleteVoteAsync(existingVote);
+            }
+            else
+            {
+                existingVote.IsPositive = isPositive;
+                existingVote.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _clipRepository.SaveChangesAsync();
+            var counts = await _clipRepository.GetVoteCountsByClipIdsAsync(new[] { clipId });
+            var count = counts.TryGetValue(clipId, out var resolvedCount) ? resolvedCount : (Likes: 0, Dislikes: 0);
+
+            return new VoteResultDto
+            {
+                Success = true,
+                UpdatedLikes = count.Likes,
+                UpdatedDislikes = count.Dislikes
+            };
         }
 
         /// <inheritdoc />

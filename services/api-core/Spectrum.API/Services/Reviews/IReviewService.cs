@@ -44,6 +44,7 @@ namespace Spectrum.API.Services.Reviews
             Guid reviewId,
             Guid userId,
             bool isAdmin = false,
+            string? deletionReason = null,
             CancellationToken cancellationToken = default
         );
     }
@@ -228,20 +229,46 @@ namespace Spectrum.API.Services.Reviews
             Guid reviewId,
             Guid userId,
             bool isAdmin = false,
+            string? deletionReason = null,
             CancellationToken cancellationToken = default
         )
         {
             var review = await GetExistingReviewAsync(reviewId, cancellationToken);
             EnsureReviewOwnerOrAdmin(review, userId, isAdmin);
+            var normalizedReason = NormalizeDeletionReason(deletionReason, isAdmin);
 
             review.IsDeleted = true;
             review.UpdatedAt = DateTime.UtcNow;
+            review.DeletedAt = DateTime.UtcNow;
+            review.DeletedByAdminId = isAdmin ? userId : null;
+            review.DeletionReason = normalizedReason;
 
             await _reviewRepository.SaveChangesAsync(cancellationToken);
             if (isAdmin)
             {
                 await TrySendReviewDeletedEmailAsync(review, cancellationToken);
             }
+        }
+
+        private static string? NormalizeDeletionReason(string? reason, bool isAdmin)
+        {
+            if (!isAdmin)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new SpectrumBusinessException("El motivo de eliminación es obligatorio.");
+            }
+
+            var normalized = reason.Trim();
+            if (normalized.Length is < 10 or > 300)
+            {
+                throw new SpectrumBusinessException("El motivo debe tener entre 10 y 300 caracteres.");
+            }
+
+            return normalized;
         }
 
         private async Task<Review> GetExistingReviewAsync(Guid reviewId, CancellationToken cancellationToken)

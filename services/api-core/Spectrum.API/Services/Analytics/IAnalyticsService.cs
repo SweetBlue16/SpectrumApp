@@ -12,8 +12,8 @@ namespace Spectrum.API.Services.Analytics
         Task<WeeklyTrendsDto> GetWeeklyTrendsAsync(CancellationToken cancellationToken = default);
         Task<TrendsDashboardDto> GetTrendsDashboardAsync(CancellationToken cancellationToken = default);
         Task<CryptDashboardDto> GetCryptDashboardAsync(CancellationToken cancellationToken = default);
-        Task<PagedResult<WeeklyReviewDto>> GetWeeklyClipsAsync(int page, int pageSize, CancellationToken cancellationToken = default);
-        Task<IReadOnlyList<WeeklyReviewDto>> GetMonthlyTopClipsAsync(CancellationToken cancellationToken = default);
+        Task<PagedResult<WeeklyReviewDto>> GetWeeklyClipsAsync(int page, int pageSize, Guid? currentUserId = null, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<WeeklyReviewDto>> GetMonthlyTopClipsAsync(Guid? currentUserId = null, CancellationToken cancellationToken = default);
     }
 
     public class AnalyticsService : IAnalyticsService
@@ -250,6 +250,7 @@ namespace Spectrum.API.Services.Analytics
         public async Task<PagedResult<WeeklyReviewDto>> GetWeeklyClipsAsync(
             int page,
             int pageSize,
+            Guid? currentUserId = null,
             CancellationToken cancellationToken = default
         )
         {
@@ -279,14 +280,16 @@ namespace Spectrum.API.Services.Analytics
                 .Where(clip => clip.CreatedAt >= window.Start && clip.CreatedAt < window.End)
                 .OrderByDescending(clip => clip.CreatedAt)
                 .ToListAsync(cancellationToken);
+            var uploadedClipCounts = await GetClipVoteCountsAsync(uploadedClips.Select(clip => clip.Id), cancellationToken);
+            var uploadedClipUserVotes = await GetClipUserVotesAsync(uploadedClips.Select(clip => clip.Id), currentUserId, cancellationToken);
 
             var allClips = reviewClips
                 .Select(review =>
                 {
                     var game = _gameRepository.GetById(review.GameId);
-                    return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl);
+                    return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl, currentUserId: currentUserId);
                 })
-                .Concat(uploadedClips.Select(MapWeeklyClip))
+                .Concat(uploadedClips.Select(clip => MapWeeklyClip(clip, uploadedClipCounts, uploadedClipUserVotes, currentUserId)))
                 .OrderByDescending(clip => clip.LikesCount)
                 .ThenByDescending(clip => clip.CreatedAt)
                 .ToList();
@@ -303,7 +306,7 @@ namespace Spectrum.API.Services.Analytics
             };
         }
 
-        public async Task<IReadOnlyList<WeeklyReviewDto>> GetMonthlyTopClipsAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<WeeklyReviewDto>> GetMonthlyTopClipsAsync(Guid? currentUserId = null, CancellationToken cancellationToken = default)
         {
             var window = ResolveWindow("month", DateTime.UtcNow);
             var reviews = await _context.Reviews
@@ -325,13 +328,15 @@ namespace Spectrum.API.Services.Analytics
                 .Include(clip => clip.Game)
                 .Where(clip => clip.CreatedAt >= window.Start && clip.CreatedAt < window.End)
                 .ToListAsync(cancellationToken);
+            var uploadedClipCounts = await GetClipVoteCountsAsync(uploadedClips.Select(clip => clip.Id), cancellationToken);
+            var uploadedClipUserVotes = await GetClipUserVotesAsync(uploadedClips.Select(clip => clip.Id), currentUserId, cancellationToken);
 
             return reviews.Select(review =>
                 {
                     var game = _gameRepository.GetById(review.GameId);
-                    return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl);
+                    return MapWeeklyReview(review, game?.Title, game?.CoverImageUrl, currentUserId: currentUserId);
                 })
-                .Concat(uploadedClips.Select(MapWeeklyClip))
+                .Concat(uploadedClips.Select(clip => MapWeeklyClip(clip, uploadedClipCounts, uploadedClipUserVotes, currentUserId)))
                 .OrderByDescending(clip => clip.LikesCount)
                 .ThenByDescending(clip => clip.CreatedAt)
                 .Take(3)
@@ -420,7 +425,7 @@ namespace Spectrum.API.Services.Analytics
                 .Select(group => new NamedMetricDto
                 {
                     Id = group.Key.ToString(),
-                    Label = $"Genero {group.Key}",
+                    Label = ResolveGenreName(group.Key),
                     Count = group.Sum(item => item.Interactions),
                     Score = group.Sum(item => item.Interactions)
                 })
@@ -429,11 +434,38 @@ namespace Spectrum.API.Services.Analytics
                 .ToList();
         }
 
+        private static string ResolveGenreName(int genreId)
+        {
+            return genreId switch
+            {
+                1 => "Racing",
+                2 => "Shooter",
+                3 => "Adventure",
+                4 => "Action",
+                5 => "RPG",
+                6 => "Fighting",
+                7 => "Puzzle",
+                10 => "Strategy",
+                11 => "Arcade",
+                14 => "Simulation",
+                15 => "Sports",
+                19 => "Family",
+                28 => "Board Games",
+                34 => "Educational",
+                40 => "Casual",
+                51 => "Indie",
+                59 => "Massively Multiplayer",
+                83 => "Platformer",
+                _ => "Genre unavailable"
+            };
+        }
+
         private static WeeklyReviewDto MapWeeklyReview(
             Models.Review review,
             string? gameTitle,
             string? gameCoverUrl,
-            int commentsCount = 0
+            int commentsCount = 0,
+            Guid? currentUserId = null
         )
         {
             return new WeeklyReviewDto
@@ -451,12 +483,20 @@ namespace Spectrum.API.Services.Analytics
                 LikesCount = review.LikesCount,
                 DislikesCount = review.DislikesCount,
                 CommentsCount = commentsCount,
+                SourceType = "REVIEW",
+                IsOwnContent = currentUserId.HasValue && review.UserId == currentUserId.Value,
                 CreatedAt = review.CreatedAt
             };
         }
 
-        private static WeeklyReviewDto MapWeeklyClip(Models.GameClip clip)
+        private static WeeklyReviewDto MapWeeklyClip(
+            Models.GameClip clip,
+            IReadOnlyDictionary<Guid, (int Likes, int Dislikes)> counts,
+            IReadOnlyDictionary<Guid, string> userVotes,
+            Guid? currentUserId
+        )
         {
+            var count = counts.TryGetValue(clip.Id, out var resolvedCount) ? resolvedCount : (Likes: 0, Dislikes: 0);
             return new WeeklyReviewDto
             {
                 ReviewId = clip.Id,
@@ -469,11 +509,60 @@ namespace Spectrum.API.Services.Analytics
                 Content = clip.Description ?? string.Empty,
                 AttachmentUrl = clip.Url,
                 AttachmentType = "video",
-                LikesCount = 0,
-                DislikesCount = 0,
+                LikesCount = count.Likes,
+                DislikesCount = count.Dislikes,
                 CommentsCount = 0,
+                SourceType = "GAME_CLIP",
+                UserVote = userVotes.TryGetValue(clip.Id, out var vote) ? vote : null,
+                IsOwnContent = currentUserId.HasValue && clip.UserId == currentUserId.Value,
                 CreatedAt = clip.CreatedAt
             };
+        }
+
+        private async Task<IReadOnlyDictionary<Guid, (int Likes, int Dislikes)>> GetClipVoteCountsAsync(
+            IEnumerable<Guid> clipIds,
+            CancellationToken cancellationToken
+        )
+        {
+            var ids = clipIds.Distinct().ToArray();
+            if (ids.Length == 0)
+            {
+                return new Dictionary<Guid, (int Likes, int Dislikes)>();
+            }
+
+            return await _context.GameClipVotes
+                .AsNoTracking()
+                .Where(vote => ids.Contains(vote.ClipId))
+                .GroupBy(vote => vote.ClipId)
+                .Select(group => new
+                {
+                    ClipId = group.Key,
+                    Likes = group.Count(vote => vote.IsPositive),
+                    Dislikes = group.Count(vote => !vote.IsPositive)
+                })
+                .ToDictionaryAsync(item => item.ClipId, item => (item.Likes, item.Dislikes), cancellationToken);
+        }
+
+        private async Task<IReadOnlyDictionary<Guid, string>> GetClipUserVotesAsync(
+            IEnumerable<Guid> clipIds,
+            Guid? userId,
+            CancellationToken cancellationToken
+        )
+        {
+            var ids = clipIds.Distinct().ToArray();
+            if (!userId.HasValue || ids.Length == 0)
+            {
+                return new Dictionary<Guid, string>();
+            }
+
+            return await _context.GameClipVotes
+                .AsNoTracking()
+                .Where(vote => vote.UserId == userId.Value && ids.Contains(vote.ClipId))
+                .ToDictionaryAsync(
+                    vote => vote.ClipId,
+                    vote => vote.IsPositive ? "like" : "dislike",
+                    cancellationToken
+                );
         }
 
         private static IReadOnlyList<MetricPointDto> BuildSeries(IEnumerable<DateTime> values, string period)

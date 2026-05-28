@@ -68,7 +68,7 @@ namespace Spectrum.API.Controllers
             var userId = GetCurrentUserId();
             var isAdmin = IsCurrentUserAdmin();
 
-            await _reviewService.DeleteAsync(reviewId, userId, isAdmin, cancellationToken);
+            await _reviewService.DeleteAsync(reviewId, userId, isAdmin, cancellationToken: cancellationToken);
 
             return NoContent();
         }

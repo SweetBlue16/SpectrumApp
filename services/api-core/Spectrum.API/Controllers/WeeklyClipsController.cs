@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Spectrum.API.Dtos.Analytics;
 using Spectrum.API.Services.Analytics;
 using Spectrum.API.Utilities;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Spectrum.API.Controllers
 {
@@ -26,7 +28,7 @@ namespace Spectrum.API.Controllers
             CancellationToken cancellationToken = default
         )
         {
-            var clips = await _analyticsService.GetWeeklyClipsAsync(page, pageSize, cancellationToken);
+            var clips = await _analyticsService.GetWeeklyClipsAsync(page, pageSize, GetCurrentUserId(), cancellationToken);
             return Ok(clips);
         }
 
@@ -34,7 +36,15 @@ namespace Spectrum.API.Controllers
         [ProducesResponseType(typeof(IReadOnlyList<WeeklyReviewDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetMonthlyTopClips(CancellationToken cancellationToken = default)
         {
-            return Ok(await _analyticsService.GetMonthlyTopClipsAsync(cancellationToken));
+            return Ok(await _analyticsService.GetMonthlyTopClipsAsync(GetCurrentUserId(), cancellationToken));
+        }
+
+        private Guid? GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
         }
     }
 }

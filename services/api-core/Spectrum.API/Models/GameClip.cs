@@ -49,5 +49,7 @@ namespace Spectrum.API.Models
 
         [ForeignKey(nameof(GameId))]
         public virtual Game Game { get; set; } = null!;
+
+        public virtual ICollection<GameClipVote> Votes { get; set; } = new List<GameClipVote>();
     }
 }

@@ -42,6 +42,16 @@ namespace Spectrum.API.Repositories
         /// <returns>The matching game clip entity, or null if no record matches the given ID.</returns>
         Task<GameClip?> GetClipByIdAsync(Guid clipId);
 
+        Task<GameClipVote?> GetVoteAsync(Guid clipId, Guid userId);
+
+        Task AddVoteAsync(GameClipVote vote);
+
+        Task DeleteVoteAsync(GameClipVote vote);
+
+        Task<IReadOnlyDictionary<Guid, (int Likes, int Dislikes)>> GetVoteCountsByClipIdsAsync(IEnumerable<Guid> clipIds);
+
+        Task<IReadOnlyDictionary<Guid, string>> GetUserVotesByClipIdsAsync(IEnumerable<Guid> clipIds, Guid userId);
+
         /// <summary>
         /// Marks an existing game clip record as deleted without physically removing it.
         /// </summary>
@@ -105,6 +115,66 @@ namespace Spectrum.API.Repositories
                 .Include(c => c.User)
                 .Include(c => c.Game)
                 .FirstOrDefaultAsync(c => c.Id == clipId);
+        }
+
+        /// <inheritdoc />
+        public async Task<GameClipVote?> GetVoteAsync(Guid clipId, Guid userId)
+        {
+            return await _context.GameClipVotes
+                .FirstOrDefaultAsync(vote => vote.ClipId == clipId && vote.UserId == userId);
+        }
+
+        /// <inheritdoc />
+        public async Task AddVoteAsync(GameClipVote vote)
+        {
+            await _context.GameClipVotes.AddAsync(vote);
+        }
+
+        /// <inheritdoc />
+        public Task DeleteVoteAsync(GameClipVote vote)
+        {
+            _context.GameClipVotes.Remove(vote);
+            return Task.CompletedTask;
+        }
+
+        /// <inheritdoc />
+        public async Task<IReadOnlyDictionary<Guid, (int Likes, int Dislikes)>> GetVoteCountsByClipIdsAsync(IEnumerable<Guid> clipIds)
+        {
+            var ids = clipIds.Distinct().ToArray();
+            if (ids.Length == 0)
+            {
+                return new Dictionary<Guid, (int Likes, int Dislikes)>();
+            }
+
+            return await _context.GameClipVotes
+                .AsNoTracking()
+                .Where(vote => ids.Contains(vote.ClipId))
+                .GroupBy(vote => vote.ClipId)
+                .Select(group => new
+                {
+                    ClipId = group.Key,
+                    Likes = group.Count(vote => vote.IsPositive),
+                    Dislikes = group.Count(vote => !vote.IsPositive)
+                })
+                .ToDictionaryAsync(item => item.ClipId, item => (item.Likes, item.Dislikes));
+        }
+
+        /// <inheritdoc />
+        public async Task<IReadOnlyDictionary<Guid, string>> GetUserVotesByClipIdsAsync(IEnumerable<Guid> clipIds, Guid userId)
+        {
+            var ids = clipIds.Distinct().ToArray();
+            if (ids.Length == 0)
+            {
+                return new Dictionary<Guid, string>();
+            }
+
+            return await _context.GameClipVotes
+                .AsNoTracking()
+                .Where(vote => vote.UserId == userId && ids.Contains(vote.ClipId))
+                .ToDictionaryAsync(
+                    vote => vote.ClipId,
+                    vote => vote.IsPositive ? "like" : "dislike"
+                );
         }
 
         /// <inheritdoc />

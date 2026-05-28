@@ -49,6 +49,8 @@ namespace Spectrum.API.Data
         /// </summary>
         public DbSet<GameClip> GameClips { get; set; }
 
+        public DbSet<GameClipVote> GameClipVotes { get; set; }
+
         public DbSet<UserBlock> UserBlocks { get; set; }
 
         public DbSet<VerificationCode> VerificationCodes { get; set; }
@@ -65,6 +67,7 @@ namespace Spectrum.API.Data
             modelBuilder.Entity<User>().HasQueryFilter(user => !user.IsDeleted);
             modelBuilder.Entity<Review>().HasQueryFilter(review => !review.IsDeleted);
             modelBuilder.Entity<GameClip>().HasQueryFilter(gameClip => !gameClip.IsDeleted);
+            modelBuilder.Entity<GameClipVote>().HasQueryFilter(vote => !vote.Clip.IsDeleted);
 
             modelBuilder.Entity<AdminDetail>()
                 .HasOne(adminDetail => adminDetail.User)
@@ -126,6 +129,19 @@ namespace Spectrum.API.Data
             modelBuilder.Entity<Review>()
                 .Property(review => review.DislikesCount)
                 .HasColumnName("dislikes_count");
+
+            modelBuilder.Entity<Review>()
+                .Property(review => review.DeletedAt)
+                .HasColumnName("deleted_at");
+
+            modelBuilder.Entity<Review>()
+                .Property(review => review.DeletedByAdminId)
+                .HasColumnName("deleted_by_admin_id");
+
+            modelBuilder.Entity<Review>()
+                .Property(review => review.DeletionReason)
+                .HasColumnName("deletion_reason")
+                .HasMaxLength(300);
 
             modelBuilder.Entity<Review>()
                 .HasIndex(review => new { review.GameId, review.CreatedAt });
@@ -193,6 +209,25 @@ namespace Spectrum.API.Data
 
             modelBuilder.Entity<GameClip>()
                 .HasIndex(gameClip => new { gameClip.UserId, gameClip.CreatedAt });
+
+            modelBuilder.Entity<GameClipVote>()
+                .HasOne(vote => vote.Clip)
+                .WithMany(clip => clip.Votes)
+                .HasForeignKey(vote => vote.ClipId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GameClipVote>()
+                .HasOne(vote => vote.User)
+                .WithMany()
+                .HasForeignKey(vote => vote.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<GameClipVote>()
+                .HasIndex(vote => new { vote.ClipId, vote.UserId })
+                .IsUnique();
+
+            modelBuilder.Entity<GameClipVote>()
+                .HasIndex(vote => new { vote.ClipId, vote.IsPositive });
 
             modelBuilder.Entity<UserBlock>()
                 .HasIndex(block => new { block.BlockerUserId, block.BlockedUserId })

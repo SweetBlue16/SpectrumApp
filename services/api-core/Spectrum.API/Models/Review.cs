@@ -102,6 +102,16 @@ namespace Spectrum.API.Models
         [Column("updated_at")]
         public DateTime? UpdatedAt { get; set; }
 
+        [Column("deleted_at")]
+        public DateTime? DeletedAt { get; set; }
+
+        [Column("deleted_by_admin_id")]
+        public Guid? DeletedByAdminId { get; set; }
+
+        [MaxLength(300)]
+        [Column("deletion_reason")]
+        public string? DeletionReason { get; set; }
+
         /// <summary>
         /// Review author navigation property.
         /// </summary>

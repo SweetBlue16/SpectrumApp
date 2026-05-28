@@ -13,6 +13,8 @@
         public string Url { get; set; } = string.Empty;
         public int LikesCount { get; set; }
         public int DislikesCount { get; set; }
+        public string? UserVote { get; set; }
+        public Guid UserId { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

@@ -134,12 +134,16 @@ namespace Spectrum.API.Controllers
         }
 
         [HttpDelete("{reviewId:guid}")]
-        public async Task<IActionResult> Delete(Guid reviewId, CancellationToken cancellationToken)
+        public async Task<IActionResult> Delete(
+            Guid reviewId,
+            [FromBody] AdminDeleteReviewDto dto,
+            CancellationToken cancellationToken
+        )
         {
             var adminId = Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var parsedAdminId)
                 ? parsedAdminId
                 : Guid.Empty;
-            await _reviewService.DeleteAsync(reviewId, adminId, isAdmin: true, cancellationToken);
+            await _reviewService.DeleteAsync(reviewId, adminId, isAdmin: true, deletionReason: dto.Reason, cancellationToken);
             return NoContent();
         }
     }

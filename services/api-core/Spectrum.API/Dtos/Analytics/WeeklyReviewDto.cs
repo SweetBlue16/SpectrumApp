@@ -15,6 +15,9 @@ namespace Spectrum.API.Dtos.Analytics
         public int LikesCount { get; set; }
         public int DislikesCount { get; set; }
         public int CommentsCount { get; set; }
+        public string SourceType { get; set; } = "REVIEW";
+        public string? UserVote { get; set; }
+        public bool IsOwnContent { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

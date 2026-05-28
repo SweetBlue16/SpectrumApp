@@ -31,7 +31,7 @@ namespace Spectrum.API.Controllers
         public async Task<IActionResult> List(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
-            [FromQuery] string? status = "PENDING",
+            [FromQuery] string? status = null,
             [FromQuery] string? targetType = null,
             [FromQuery] string? search = null,
             [FromQuery] string sort = "date_desc",
@@ -40,7 +40,7 @@ namespace Spectrum.API.Controllers
         {
             var normalizedPage = Math.Max(1, page);
             var normalizedPageSize = Math.Clamp(pageSize, 1, 50);
-            var statuses = string.IsNullOrWhiteSpace(status)
+            var statuses = string.IsNullOrWhiteSpace(status) || status.Equals("ALL", StringComparison.OrdinalIgnoreCase)
                 ? KnownStatuses
                 : [status.ToUpperInvariant()];
 
